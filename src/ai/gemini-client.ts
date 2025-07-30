@@ -3,22 +3,14 @@ import { z } from 'zod';
 
 // Define the intent schema
 export const QueryIntentSchema = z.object({
-  action: z.enum(['search', 'get', 'list', 'create', 'update', 'transition']),
-  entity: z.enum(['tickets', 'issues', 'projects', 'users', 'pages', 'comments']),
-  filters: z.array(z.object({
-    field: z.string(),
-    operator: z.enum(['equals', 'contains', 'in', 'greater_than', 'less_than']),
-    value: z.union([z.string(), z.number(), z.array(z.string())])
-  })).optional(),
-  parameters: z.record(z.unknown()),
-  confidence: z.number().min(0).max(1)
+  action: z.enum(['search', 'get', 'list', 'greeting', 'conversation']),
+  entity: z.enum(['tickets', 'projects', 'spaces', 'conversation', 'tools'])
 });
 
 export type QueryIntent = z.infer<typeof QueryIntentSchema>;
 
 interface AIResponse {
   intent: QueryIntent;
-  reasoning: string;
   suggestedTool: string;
   toolParameters: Record<string, any>;
 }
@@ -32,8 +24,8 @@ export class GeminiClient {
     this.model = model;
   }
 
-  async parseQuery(userQuery: string): Promise<AIResponse> {
-    const prompt = this.createQueryParsingPrompt(userQuery);
+  async parseQuery(userQuery: string, availableTools?: Array<{name: string, description: string}>): Promise<AIResponse> {
+    const prompt = this.createQueryParsingPrompt(userQuery, availableTools);
     
     try {
       const response = await this.ai.models.generateContent({
@@ -86,98 +78,55 @@ export class GeminiClient {
     }
   }
 
-  private createQueryParsingPrompt(userQuery: string): string {
-    return `You are an AI assistant that parses natural language queries about Jira and Confluence and converts them to structured intents.
+  private createQueryParsingPrompt(userQuery: string, availableTools?: Array<{name: string, description: string}>): string {
+    // Use dynamic tools if provided, otherwise fallback to hardcoded list
+    const toolsList = availableTools ? 
+      availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n') :
+      `- searchJiraIssuesUsingJql: Search Jira tickets
+- getJiraIssue: Get specific ticket details  
+- getJiraProjects: List projects
+- getConfluenceSpaces: List Confluence spaces
+- searchConfluenceContent: Search Confluence content`;
 
-Given this user query: "${userQuery}"
+    return `You are an AI assistant that helps users retrieve data from Jira and Confluence using MCP tools.
 
-First, determine if this is:
-1. A greeting/conversational query (like "hi", "hello", "how are you")
-2. An Atlassian-related query (about tickets, projects, etc.)
+User query: "${userQuery}"
 
-If it's a greeting/conversational query, respond with:
+Available MCP tools:
+${toolsList}
+
+Determine the user's intent and respond with JSON:
 {
   "intent": {
-    "action": "search",
-    "entity": "tickets", 
-    "filters": [],
-    "parameters": {},
-    "confidence": 0.1
+    "action": "search|get|list|greeting|conversation",
+    "entity": "tickets|projects|spaces|conversation|tools"
   },
-  "reasoning": "This is a conversational greeting, defaulting to show recent tickets",
-  "suggestedTool": "searchJiraIssuesUsingJql",
+  "suggestedTool": "tool_name_or_none",
   "toolParameters": {
-    "cloudId": "65fa3ca6-c0c5-4d04-93d2-88127a2297ff",
-    "jql": "status != Done ORDER BY updated DESC"
+    "key": "value"
   }
 }
 
-If it's an Atlassian-related query, analyze it and return a JSON response with this exact structure:
-{
-  "intent": {
-    "action": "search|get|list|create|update|transition",
-    "entity": "tickets|issues|projects|users|pages|comments",
-    "filters": [
-      {
-        "field": "field_name",
-        "operator": "equals|contains|in|greater_than|less_than",
-        "value": "field_value"
-      }
-    ],
-    "parameters": {
-      "key": "value"
-    },
-    "confidence": 0.95
-  },
-  "reasoning": "Brief explanation of why you chose this intent",
-  "suggestedTool": "exact_mcp_tool_name",
-  "toolParameters": {
-    "parameter_name": "parameter_value"
-  }
-}
+Parameter extraction examples:
+- "Get ticket MD-1" → action: "get", toolParameters: {"issueIdOrKey": "MD-1"}
+- "Show me jira tickets" → action: "search", toolParameters: {"jql": ""}
+- "List all tickets" → action: "search", toolParameters: {"jql": ""}
+- "Show me high priority bugs" → action: "search", toolParameters: {"jql": "priority = High AND type = Bug"}
+- "Search for login issues" → action: "search", toolParameters: {"jql": "summary ~ 'login'"}
+- "List all projects" → action: "list", toolParameters: {}
 
-Available MCP Tools:
-- searchJiraIssuesUsingJql: Search tickets with JQL query
-- getJiraIssue: Get specific ticket by ID/key
-- getJiraProjects: List all projects
-- getJiraProject: Get specific project details
-- getJiraIssueTransitions: Get available transitions for a ticket
-- createJiraIssue: Create a new ticket
-- updateJiraIssue: Update an existing ticket
+Important: Use "get" only when user specifies a specific ticket ID/key. Use "search" for listing or finding multiple tickets.
 
-Query Examples:
-- "show me all open tickets" → action: "search", entity: "tickets", suggestedTool: "searchJiraIssuesUsingJql"
-- "get ticket MD-1" → action: "get", entity: "tickets", suggestedTool: "getJiraIssue"
-- "list all projects" → action: "list", entity: "projects", suggestedTool: "getJiraProjects"
-
-Important: Always include cloudId: "65fa3ca6-c0c5-4d04-93d2-88127a2297ff" in toolParameters.
-
-Return only valid JSON, no additional text.`;
+For greetings, conversations, or questions about available tools, use suggestedTool: "none".`;
   }
 
-  private createResponseFormattingPrompt(data: any, queryType: string, originalQuery: string): string {
-    return `You are an AI assistant that converts raw Jira/Confluence API data into human-readable responses.
+  private createResponseFormattingPrompt(data: any, _queryType: string, originalQuery: string): string {
+    return `You are an AI assistant that helps users retrieve data from Jira and Confluence using MCP tools.
 
-Original Query: "${originalQuery}"
-Query Type: "${queryType}"
-Raw Data: ${JSON.stringify(data, null, 2)}
+User asked: "${originalQuery}"
+Data received: ${JSON.stringify(data, null, 2)}
 
-Instructions:
-1. If the original query was a greeting (like "hi", "hello", "how are you"), start with a friendly greeting
-2. Then convert the data into a natural, conversational response that:
-   - Directly answers the user's question
-   - Uses emojis and formatting for better readability
-   - Highlights important information (status, priority, assignee, etc.)
-   - Keeps the response concise but informative
-   - Uses bullet points or numbered lists when appropriate
-
-Examples:
-- For greetings + ticket data: "Hi there! 👋 I'm doing great and ready to help with your Atlassian data! Here's what I found: • MD-1 (High Priority) • MD-2 (Medium)..."
-- For ticket searches: "Found 3 tickets: • MD-1 (High Priority) • MD-2 (Medium)..."
-- For single ticket: "📋 MD-1: 'Ticket Title' | Status: To Do | Priority: High | Assignee: John Doe"
-- For projects: "Found 2 projects: • Project A (10 tickets) • Project B (5 tickets)"
-
-Be conversational and helpful. If there are no results, explain that clearly with suggestions.`;
+Convert this data into a helpful, conversational response for the user.`;
   }
 
   private parseAIResponse(responseText: string): AIResponse {
@@ -193,7 +142,6 @@ Be conversational and helpful. If there are no results, explain that clearly wit
       
       return {
         intent: validatedIntent,
-        reasoning: parsed.reasoning || 'No reasoning provided',
         suggestedTool: parsed.suggestedTool || 'unknown',
         toolParameters: parsed.toolParameters || {}
       };

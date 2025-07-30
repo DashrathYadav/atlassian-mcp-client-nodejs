@@ -28,6 +28,7 @@ export class AIAtlassianCLI {
   private mcpClient: AtlassianMCPClient;
   private dispatcher: MCPToolDispatcher;
   private context: ConversationContext;
+  private cachedTools: Array<{name: string, description: string}> | null = null;
 
   constructor() {
     const geminiApiKey = process.env['GEMINI_API_KEY'];
@@ -65,6 +66,11 @@ export class AIAtlassianCLI {
     try {
       await this.mcpClient.connect();
       mcpSpinner.succeed('Atlassian MCP connected');
+      
+      // Cache tools once at startup for better performance
+      const toolsSpinner = ora('Loading available tools...').start();
+      this.cachedTools = await this.dispatcher.getRealMCPTools();
+      toolsSpinner.succeed(`Loaded ${this.cachedTools.length} tools`);
     } catch (error) {
       mcpSpinner.fail(`Failed to connect to Atlassian MCP: ${error}`);
       return;
@@ -153,13 +159,72 @@ export class AIAtlassianCLI {
     const spinner = ora('🧠 Understanding your query...').start();
     
     try {
-      // Step 1: Parse query with Gemini
+      // Step 1: Parse query with Gemini using cached tools (fetched at startup)
       spinner.text = '🧠 Analyzing query with AI...';
-      const aiResponse = await this.gemini.parseQuery(userQuery);
+      const aiResponse = await this.gemini.parseQuery(userQuery, this.cachedTools || undefined);
       
-      // Step 2: Route to MCP tool
+      // Log the AI's raw decision before routing
+      console.log(`🤖 AI Decision: ${JSON.stringify({
+        intent: aiResponse.intent,
+        suggestedTool: aiResponse.suggestedTool,
+        toolParameters: aiResponse.toolParameters
+      }, null, 2)}`);
+      
+      // Check if this is a conversational query that doesn't need MCP tools
+      if (aiResponse.intent.action === 'greeting' || aiResponse.intent.action === 'conversation' || aiResponse.suggestedTool === 'none') {
+        spinner.succeed('✅ Complete!');
+        
+        // Log that AI is responding from internal knowledge (not using MCP)
+        console.log(`💭 AI Response: Using internal knowledge (no MCP tools called)`);
+        
+        let responseData;
+        let queryType = aiResponse.intent.action;
+        
+        // Handle different types of non-MCP queries
+        if (aiResponse.intent.entity === 'tools') {
+          // User is asking about available tools - use cached tools
+          responseData = {
+            tools: this.cachedTools || [],
+            message: "Here are the available MCP tools from the Atlassian server",
+            totalCount: (this.cachedTools || []).length
+          };
+          queryType = 'list';
+        } else {
+          // Regular greeting
+          responseData = { 
+            greeting: true, 
+            message: "Hello! I'm your AI assistant for Atlassian." 
+          };
+        }
+        
+        // Generate a conversational response without MCP data
+        const conversationalResponse = await this.gemini.formatResponse(
+          responseData,
+          queryType,
+          userQuery
+        );
+        
+        console.log();
+        console.log(chalk.white(conversationalResponse));
+        console.log();
+        
+        // Store in conversation history
+        this.context.history.push({
+          userQuery,
+          aiResponse: conversationalResponse,
+          timestamp: new Date()
+        });
+        
+        return;
+      }
+      
+      // Step 2: Route to MCP tool (only for Atlassian queries)
       spinner.text = '🔄 Routing to appropriate tool...';
+      
       const toolCall = this.router.routeToTool(aiResponse.intent, aiResponse.toolParameters);
+      
+      // Log that AI is routing to MCP tools (vs using internal knowledge)
+      console.log(`🔗 AI Routing: ${aiResponse.intent.action} ${aiResponse.intent.entity} → ${toolCall.toolName}`);
       
       // Step 3: Execute MCP tool
       spinner.text = `🛠️  Calling ${toolCall.toolName}...`;

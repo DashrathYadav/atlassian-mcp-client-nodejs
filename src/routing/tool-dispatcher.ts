@@ -8,7 +8,8 @@ export class MCPToolDispatcher {
   }
 
   async callTool(toolName: string, parameters: Record<string, any>): Promise<any> {
-    console.log(`🛠️  Calling tool: ${toolName} with parameters:`, parameters);
+    // Log when AI is calling MCP tools (vs using internal knowledge)
+    console.log(`🔧 MCP Tool: ${toolName}`);
     
     try {
       switch (toolName) {
@@ -89,8 +90,8 @@ export class MCPToolDispatcher {
     }
   }
 
-  getAvailableTools(): string[] {
-    return [
+  getAvailableTools(): Array<{name: string, description: string}> {
+    const toolNames = [
       'searchJiraIssuesUsingJql',
       'getJiraIssue',
       'getJiraProjects', 
@@ -105,6 +106,25 @@ export class MCPToolDispatcher {
       'getUserInfo',
       'getAccessibleResources'
     ];
+    
+    return toolNames.map((name: string) => ({
+      name,
+      description: this.getToolDescription(name)
+    }));
+  }
+
+  async getRealMCPTools(): Promise<Array<{name: string, description: string}>> {
+    try {
+      const realTools = await this.mcpClient.listTools();
+      return realTools.map((tool: any) => ({
+        name: tool.name,
+        description: tool.description || 'No description available'
+      }));
+    } catch (error) {
+      console.error('Error fetching real MCP tools:', error);
+      // Fallback to hardcoded list
+      return this.getAvailableTools();
+    }
   }
 
   getToolDescription(toolName: string): string {

@@ -39,7 +39,7 @@ export class MCPToolRouter {
       mcpTool: 'getJiraIssue',
       parameterMapping: {
         cloudId: '65fa3ca6-c0c5-4d04-93d2-88127a2297ff',
-        issueIdOrKey: (params: any) => params.ticketId || params.key || params.issueKey
+        issueIdOrKey: (params: any) => params.issueIdOrKey || params.ticketId || params.key || params.issueKey
       }
     },
     {
@@ -47,7 +47,7 @@ export class MCPToolRouter {
       mcpTool: 'getJiraIssue',
       parameterMapping: {
         cloudId: '65fa3ca6-c0c5-4d04-93d2-88127a2297ff',
-        issueIdOrKey: (params: any) => params.ticketId || params.key || params.issueKey
+        issueIdOrKey: (params: any) => params.issueIdOrKey || params.ticketId || params.key || params.issueKey
       }
     },
     
