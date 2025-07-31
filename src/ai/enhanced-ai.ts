@@ -66,6 +66,25 @@ export class EnhancedAI {
         this.model = model;
     }
 
+    async testConnection(): Promise<void> {
+        try {
+            const response = await this.ai.models.generateContent({
+                model: this.model,
+                contents: 'Hello from Gemini AI!',
+                config: {
+                    temperature: 0.1,
+                    maxOutputTokens: 50
+                }
+            });
+            
+            if (!response.text) {
+                throw new Error('No response from Gemini AI');
+            }
+        } catch (error) {
+            throw new Error(`Gemini AI connection failed: ${error}`);
+        }
+    }
+
     async analyzeContext(history: any): Promise<AIAnalysis> {
         const prompt = `
     Analyze the current execution context and provide strategic insights:
@@ -408,7 +427,7 @@ export class EnhancedAI {
                 }
             });
 
-            const responseText = response.text.trim();
+            const responseText = response.text?.trim() || '';
             if (!responseText) {
                 throw new Error('Empty response from Gemini');
             }
@@ -481,6 +500,26 @@ export class EnhancedAI {
                 isComplete: false,
                 reason: 'Unable to determine completion status'
             };
+        }
+    }
+
+    async generateResponse(prompt: string): Promise<string> {
+        try {
+            const response = await this.ai.models.generateContent({
+                model: this.model,
+                contents: prompt,
+                config: {
+                    temperature: 0.7,
+                    maxOutputTokens: 2000,
+                    topP: 0.9,
+                    topK: 40
+                }
+            });
+
+            return response.text || 'No response generated';
+        } catch (error) {
+            console.error('Error generating response:', error);
+            return 'Unable to generate response';
         }
     }
 } 

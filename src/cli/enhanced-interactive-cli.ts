@@ -53,11 +53,11 @@ export class EnhancedInteractiveCLI {
     private executionHistory: ExecutionHistory | null = null;
 
     constructor() {
-        if (!process.env.GEMINI_API_KEY) {
+        if (!process.env['GEMINI_API_KEY']) {
             throw new Error('GEMINI_API_KEY is required. Please set it in your environment variables.');
         }
 
-        this.ai = new EnhancedAI(process.env.GEMINI_API_KEY);
+        this.ai = new EnhancedAI(process.env['GEMINI_API_KEY']);
         this.mcpClient = new AtlassianMCPClient();
     }
 
@@ -74,7 +74,11 @@ export class EnhancedInteractiveCLI {
             // Get available tools
             spinner.text = '📋 Fetching available tools...';
             spinner.start();
-            this.availableTools = await this.mcpClient.listTools();
+            const tools = await this.mcpClient.listTools();
+            this.availableTools = tools.map(tool => ({
+                name: tool.name,
+                description: tool.description || 'No description available'
+            }));
             spinner.succeed(`✅ Found ${this.availableTools.length} available tools`);
 
             // Start interactive session
@@ -335,7 +339,7 @@ export class EnhancedInteractiveCLI {
                     type: 'list',
                     name: 'selectedAlternative',
                     message: 'Choose an alternative action:',
-                    choices: suggestedAction.alternatives.map((alt, index) => ({
+                    choices: suggestedAction.alternatives.map((alt) => ({
                         name: alt.label,
                         value: alt
                     }))
@@ -422,7 +426,7 @@ export class EnhancedInteractiveCLI {
             spinner.fail(`❌ Execution failed: ${error}`);
             return {
                 success: false,
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 duration: 0
             };
         }

@@ -9,13 +9,13 @@ async function testEnhancedAI() {
     console.log(chalk.blue.bold('🧪 Testing Enhanced AI Integration'));
     console.log(chalk.gray('=====================================\n'));
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env['GEMINI_API_KEY']) {
         console.error(chalk.red('❌ GEMINI_API_KEY not found in environment variables'));
         console.log(chalk.yellow('💡 Please set GEMINI_API_KEY to test the enhanced AI'));
         return;
     }
 
-    const ai = new EnhancedAI(process.env.GEMINI_API_KEY);
+    const ai = new EnhancedAI(process.env['GEMINI_API_KEY']);
 
     // Mock execution history for testing
     const mockHistory = {

@@ -32,7 +32,7 @@ export class AtlassianMCPClient extends EventEmitter {
 
     this.client = new Client(
       { name: "atlassian-mcp-client", version: "1.0.0" },
-      { capabilities: {} }
+      {}
     );
   }
 
@@ -138,8 +138,8 @@ export class AtlassianMCPClient extends EventEmitter {
 
     // Add cloudId to parameters if available and not already present
     const finalParameters = { ...parameters };
-    if (this.cloudId && !finalParameters.cloudId) {
-      finalParameters.cloudId = this.cloudId;
+    if (this.cloudId && !finalParameters['cloudId']) {
+      finalParameters['cloudId'] = this.cloudId;
     }
 
     try {
