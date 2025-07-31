@@ -3,6 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 export interface ToolInfo {
     name: string;
     description: string;
+    serverName?: string;
 }
 
 export interface AIAnalysis {

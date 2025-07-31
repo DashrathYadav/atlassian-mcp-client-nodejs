@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
 import { BedrockClient, ToolInfo, BedrockConfig } from '../ai/bedrock-client.js';
-import { AtlassianMCPClient } from '../client/atlassian-mcp-client.js';
+import { MultiServerMCPManager, ServerConfig } from '../client/multi-server-mcp-manager.js';
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +22,7 @@ interface ConversationContext {
 
 export class SimpleAIAtlassianCLI {
   private bedrock: BedrockClient;
-  private mcpClient: AtlassianMCPClient;
+  private mcpManager: MultiServerMCPManager;
   private context: ConversationContext;
   private availableTools: ToolInfo[] = [];
 
@@ -47,15 +47,46 @@ export class SimpleAIAtlassianCLI {
     };
 
     this.bedrock = new BedrockClient(config);
-    this.mcpClient = new AtlassianMCPClient();
+    this.mcpManager = new MultiServerMCPManager();
     this.context = {
       history: [],
       currentSession: new Date().toISOString()
     };
+
+    // Register servers
+    this.registerServers();
+  }
+
+  private registerServers(): void {
+    // Register Atlassian server
+    const atlassianConfig: ServerConfig = {
+      name: 'atlassian',
+      command: 'npx',
+      args: ['-y', 'mcp-remote@0.1.13', 'https://mcp.atlassian.com/v1/sse'],
+      enabled: true
+    };
+    this.mcpManager.registerServer(atlassianConfig);
+
+    // Register your database server - using environment variable for path
+    const databaseConfig: ServerConfig = {
+      name: 'database-server-mssql',
+      command: 'dotnet',
+      args: ['run', '--project', 'MsDbServer'],
+      cwd: process.env['DB_SERVER_PATH'] || '../../../MCP-projects/MCP-DbServer', // Use environment variable - points to workspace root
+      env: {
+        'McpServer__Transport__Stdio__Enabled': 'true',
+        'McpServer__Transport__Http__Enabled': 'false',
+        'McpServer__Database__Provider': 'mssql',
+        'McpServer__Database__ConnectionString': process.env['DB_CONNECTION_STRING'] || 'Server=localhost,1433;Database=app_db;User Id=sa;Password=Temp@123;TrustServerCertificate=true;',
+        'McpServer__Logging__LogLevel': 'Information'
+      },
+      enabled: true
+    };
+    this.mcpManager.registerServer(databaseConfig);
   }
 
   async start(): Promise<void> {
-    console.log(chalk.blue.bold('🤖 Simple AI-Powered Atlassian Assistant'));
+    console.log(chalk.blue.bold('🤖 Simple AI-Powered Multi-Server Assistant'));
     console.log(chalk.gray('Connecting to services...'));
 
     // Step 1: Test AWS Bedrock connection
@@ -67,36 +98,35 @@ export class SimpleAIAtlassianCLI {
     }
     spinner.succeed('AWS Bedrock connected');
 
-    // Step 2: Connect to Atlassian MCP
-    const mcpSpinner = ora('Connecting to Atlassian MCP...').start();
+    // Step 2: Connect to all MCP servers
+    const mcpSpinner = ora('Connecting to MCP servers...').start();
     try {
-      await this.mcpClient.connect();
-      mcpSpinner.succeed('Atlassian MCP connected');
+      await this.mcpManager.connectToAllServers();
+      const connectedServers = this.mcpManager.getConnectedServers();
+      mcpSpinner.succeed(`Connected to ${connectedServers.length} MCP servers: ${connectedServers.join(', ')}`);
     } catch (error) {
-      mcpSpinner.fail(`Failed to connect to Atlassian MCP: ${error}`);
-      return;
+      mcpSpinner.fail(`Failed to connect to some MCP servers: ${error}`);
+      // Continue with available servers
     }
 
     // Step 3: Get all available tools
     const toolsSpinner = ora('Loading available MCP tools...').start();
     try {
-      const tools = await this.mcpClient.listTools();
-      this.availableTools = tools.map((tool: any) => ({
-        name: tool.name,
-        description: tool.description || 'No description available'
-      }));
-      toolsSpinner.succeed(`Loaded ${this.availableTools.length} MCP tools`);
+      this.availableTools = this.mcpManager.getAllTools();
+      toolsSpinner.succeed(`Loaded ${this.availableTools.length} MCP tools from all servers`);
     } catch (error) {
       toolsSpinner.fail(`Failed to load tools: ${error}`);
       return;
     }
 
     console.log();
-    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira and Confluence.'));
+    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira, Confluence, and your database.'));
     console.log(chalk.gray('Examples:'));
     console.log(chalk.gray('  • "Show me all open tickets"'));
     console.log(chalk.gray('  • "Get details for ticket MD-1"'));
     console.log(chalk.gray('  • "List all projects"'));
+    console.log(chalk.gray('  • "Query users table"'));
+    console.log(chalk.gray('  • "Show database schema"'));
     console.log(chalk.gray('  • Type "help" for more commands'));
     console.log();
 
@@ -183,9 +213,9 @@ export class SimpleAIAtlassianCLI {
       let finalResponse: string;
 
       if (analysis.shouldCallTool && analysis.toolName) {
-        // Step 2: Call the MCP tool directly
+        // Step 2: Call the MCP tool on the appropriate server
         spinner.text = `🛠️  Calling ${analysis.toolName}...`;
-        const toolResult = await this.mcpClient.callTool(analysis.toolName, analysis.parameters || {});
+        const toolResult = await this.mcpManager.callTool(analysis.toolName, analysis.parameters || {});
 
         // Step 3: Let AI format the response
         spinner.text = '✨ Formatting response...';
@@ -224,6 +254,8 @@ export class SimpleAIAtlassianCLI {
     console.log(chalk.gray('  • "List all projects"'));
     console.log(chalk.gray('  • "Find high priority bugs"'));
     console.log(chalk.gray('  • "Search for tickets about login"'));
+    console.log(chalk.gray('  • "Query users table"'));
+    console.log(chalk.gray('  • "Show database schema"'));
     console.log(chalk.gray('  • "Hello" or "What can you do?"'));
 
     console.log(chalk.white('\n⚡ Special Commands:'));
@@ -256,17 +288,29 @@ export class SimpleAIAtlassianCLI {
     console.log(chalk.blue.bold('\n🛠️  Available MCP Tools'));
     console.log(chalk.gray('======================='));
 
-    this.availableTools.forEach(tool => {
-      console.log(chalk.white(`  • ${tool.name}`));
-      console.log(chalk.gray(`    ${tool.description}`));
-    });
+    // Group tools by server
+    const toolsByServer = this.availableTools.reduce((acc, tool) => {
+      if (!acc[tool.serverName]) {
+        acc[tool.serverName] = [];
+      }
+      acc[tool.serverName].push(tool);
+      return acc;
+    }, {} as Record<string, ToolInfo[]>);
+
+    for (const [serverName, tools] of Object.entries(toolsByServer)) {
+      console.log(chalk.cyan(`\n📡 ${serverName.toUpperCase()} SERVER:`));
+      tools.forEach(tool => {
+        console.log(chalk.white(`  • ${tool.name}`));
+        console.log(chalk.gray(`    ${tool.description}`));
+      });
+    }
     console.log();
   }
 
   private async cleanup(): Promise<void> {
     console.log(chalk.yellow('Cleaning up connections...'));
     try {
-      await this.mcpClient.disconnect();
+      await this.mcpManager.disconnectFromAllServers();
       console.log(chalk.green('✅ Cleanup complete'));
     } catch (error) {
       console.error(chalk.red('Error during cleanup:'), error);
@@ -301,11 +345,14 @@ program
   });
 
 // Default action is to start chat
-if (process.argv.length === 2) {
-  const cli = new SimpleAIAtlassianCLI();
-  cli.start().catch(console.error);
-} else {
-  program.parse();
+// Only auto-start if this file is run directly, not when imported
+if (import.meta.url === `file://${process.argv[1]}`) {
+  if (process.argv.length === 2) {
+    const cli = new SimpleAIAtlassianCLI();
+    cli.start().catch(console.error);
+  } else {
+    program.parse();
+  }
 }
 
 export default SimpleAIAtlassianCLI;

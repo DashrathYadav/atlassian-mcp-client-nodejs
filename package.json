@@ -16,6 +16,8 @@
     "simple": "tsx run-simple-enhanced.ts",
     "test:bedrock": "tsx src/test/test-bedrock.ts",
     "test:enhanced": "tsx src/test/test-enhanced-ai.ts",
+    "test:multi-server": "tsx src/demo/test-multi-server.ts",
+    "test:path": "node test-path.js",
     "connect": "tsx src/index.ts connect",
     "tools": "tsx src/index.ts tools",
     "test": "jest",
