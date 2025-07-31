@@ -3,7 +3,6 @@
 import { Command } from 'commander';
 import { AtlassianMCPClient } from './client/atlassian-mcp-client';
 import { SimpleAIAtlassianCLI } from './cli/ai-cli';
-import { EnhancedInteractiveCLI } from './cli/enhanced-interactive-cli';
 
 const program = new Command();
 
@@ -25,18 +24,7 @@ program
     }
   });
 
-program
-  .command('enhanced')
-  .description('Start enhanced AI-powered multi-step interactive session')
-  .action(async () => {
-    try {
-      const cli = new EnhancedInteractiveCLI();
-      await cli.start();
-    } catch (error) {
-      console.error('Enhanced AI session failed:', error);
-      process.exit(1);
-    }
-  });
+
 
 program
   .command('connect')
@@ -89,4 +77,4 @@ program
 
 program.parse();
 
-export { AtlassianMCPClient, SimpleAIAtlassianCLI, EnhancedInteractiveCLI };
+export { AtlassianMCPClient, SimpleAIAtlassianCLI };

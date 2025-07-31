@@ -5,12 +5,9 @@ A simple and elegant AI-powered Model Context Protocol (MCP) client for Atlassia
 ## 🚀 Features
 
 - **AI-Powered Queries**: Natural language interaction with Jira and Confluence
-- **Enhanced Multi-Step Execution**: Complex queries with real-time AI decision making
 - **Dynamic Tool Discovery**: Automatically discovers available MCP tools
-- **Real-Time Dashboard**: Interactive UI for monitoring and controlling execution
-- **Data Preservation**: Complete audit trail of all operations
+- **Simple and Clean Interface**: Easy-to-use CLI for Atlassian operations
 - **Error Recovery**: AI-powered error detection and recovery suggestions
-- **Strategy Optimization**: Continuous improvement of execution strategies
 
 ## 🎯 Quick Start
 
@@ -30,38 +27,32 @@ cd atlassian-mcp-client
 # Install dependencies
 npm install
 
-# Set up environment variables
-export GEMINI_API_KEY="your-gemini-api-key"
-export ATLASSIAN_CLIENT_ID="your-atlassian-client-id"
-export ATLASSIAN_CLIENT_SECRET="your-atlassian-client-secret"
+# Set up authentication (interactive setup)
+npm run setup
+
+# Or manually create .env file (see AUTHENTICATION_SETUP.md)
 ```
 
 ### Usage
 
-#### Enhanced AI-Powered Multi-Step Execution (Recommended)
+#### AI-Powered Session
 
 ```bash
-# Start enhanced interactive session
-npm run enhanced
+# Start AI session
+npm run ai
 ```
 
 This mode provides:
-- **Real-time AI decision making** based on intermediate results
-- **Interactive dashboard** showing progress and AI reasoning
-- **User control** over each step with alternatives
-- **Complete data preservation** and audit trail
-- **Error recovery** with AI suggestions
-
-#### Simple AI-Powered Session
-
-```bash
-# Start simple AI session
-npm run ai
-```
+- **Natural language queries** for Jira and Confluence
+- **AI-powered decision making** for tool selection
+- **Simple and clean interface** for Atlassian operations
 
 #### Basic Operations
 
 ```bash
+# Test authentication
+npm run auth:test
+
 # Test connection
 npm run connect
 
@@ -71,52 +62,28 @@ npm run tools
 # Test AI integration
 npm run test:gemini
 
-# Test enhanced AI
-npm run test:enhanced
-```
-
-## 🧠 Enhanced AI Features
-
-### Multi-Step Execution
-The enhanced mode can handle complex queries that require multiple steps:
 
 ```
-"Find all high priority bugs, check if they're assigned to John, 
-and assign unassigned ones to him"
+
+## 🧠 AI Features
+
+### Natural Language Processing
+The AI can understand and process natural language queries:
+
+```
+"Show me all open tickets"
+"Get details for ticket MD-1"
+"List all projects"
 ```
 
-This query would be broken down into:
-1. Search for high priority bugs
-2. Check current assignees
-3. Identify unassigned bugs
-4. Assign unassigned bugs to John
+### Intelligent Tool Selection
+The AI automatically selects the appropriate MCP tools based on your query:
 
-### Real-Time Decision Making
-The AI makes decisions based on actual results from previous steps:
-
-- **Dynamic Strategy**: Adapts approach based on intermediate results
+- **Smart Analysis**: Analyzes your request and chooses the right tools
 - **Error Recovery**: Suggests alternative actions when operations fail
-- **Data Validation**: Validates results and suggests improvements
-- **Insight Generation**: Provides insights about patterns and opportunities
+- **Response Formatting**: Formats responses in a user-friendly way
 
-### Interactive Dashboard
-The enhanced CLI provides a real-time dashboard showing:
 
-- **Progress**: Current step and overall progress
-- **AI Analysis**: Understanding, accomplishments, and remaining tasks
-- **Current Data**: Recent results and accumulated information
-- **AI Recommendations**: Suggested next actions with reasoning
-- **Alternatives**: Alternative approaches when available
-- **Insights**: AI-generated insights about the data
-
-### User Control Options
-At each step, users can:
-
-- ✅ **Execute AI recommendation**: Proceed with AI's suggested action
-- 🔄 **Choose alternative**: Select from AI-provided alternatives
-- ⚙️ **Modify parameters**: Adjust action parameters
-- 📊 **Deep analysis**: Pause and analyze current state
-- ❌ **Stop execution**: Halt the process
 
 ## 🔧 Configuration
 
@@ -137,36 +104,6 @@ The client uses the official `mcp-remote` proxy to handle OAuth authentication a
 
 ## 📊 Example Interactions
 
-### Enhanced Mode Examples
-
-```
-🤖 AI-Powered Multi-Step Execution
-=====================================
-
-Query: Find all high priority bugs and assign them to John
-
-🧠 AI Analysis:
-Understanding: Need to find high priority bugs and assign unassigned ones to John
-Accomplished: None yet
-Remaining: Search for bugs, check assignments, assign unassigned bugs
-Confidence: 85%
-
-🎯 AI Recommendation:
-Search for high priority bugs using JQL
-Reasoning: First step is to identify all high priority bugs
-Confidence: 90%
-Tool: searchJiraIssuesUsingJql
-
-What would you like to do?
-❯ ✅ Execute AI recommendation
-  🔄 Choose alternative action
-  ⚙️ Modify parameters
-  📊 Deep analysis
-  ❌ Stop execution
-```
-
-### Simple Mode Examples
-
 ```
 > Show me all open tickets
 ✅ Found 15 open tickets in your project
@@ -176,37 +113,32 @@ What would you like to do?
 
 > Find high priority bugs
 ✅ Found 3 high priority bugs that need attention
+
+> List all projects
+✅ Found 5 projects in your Atlassian instance
 ```
 
 ## 🏗️ Architecture
 
 ### Core Components
 
-1. **EnhancedInteractiveCLI**: Main interface for multi-step execution
-2. **EnhancedAI**: Advanced AI capabilities for decision making
+1. **SimpleAIAtlassianCLI**: Main interface for AI-powered interactions
+2. **GeminiClient**: AI capabilities for query analysis and response formatting
 3. **AtlassianMCPClient**: Direct MCP tool communication
-4. **Execution History**: Complete audit trail and data preservation
 
 ### Data Flow
 
-1. **User Query** → EnhancedInteractiveCLI
-2. **AI Analysis** → EnhancedAI.analyzeContext()
-3. **Action Suggestion** → EnhancedAI.suggestNextAction()
-4. **User Decision** → Interactive Dashboard
-5. **Tool Execution** → AtlassianMCPClient.callTool()
-6. **Result Validation** → EnhancedAI.validateResult()
-7. **History Update** → Execution History
-8. **Insight Generation** → EnhancedAI.generateInsights()
-9. **Completion Check** → EnhancedAI.checkCompletion()
+1. **User Query** → SimpleAIAtlassianCLI
+2. **AI Analysis** → GeminiClient.analyzeQuery()
+3. **Tool Execution** → AtlassianMCPClient.callTool()
+4. **Response Formatting** → GeminiClient.formatResponse()
+5. **User Response** → Display formatted result
 
 ## 🧪 Testing
 
 ```bash
 # Test basic AI integration
 npm run test:gemini
-
-# Test enhanced AI capabilities
-npm run test:enhanced
 
 # Test MCP connection
 npm run connect
@@ -242,7 +174,7 @@ export DEBUG=atlassian-mcp-client:*
 
 ## 📈 Roadmap
 
-- [ ] **Web UI**: Browser-based interface for enhanced execution
+- [ ] **Web UI**: Browser-based interface for AI interactions
 - [ ] **Batch Processing**: Handle multiple queries simultaneously
 - [ ] **Custom Workflows**: User-defined execution patterns
 - [ ] **Integration APIs**: REST API for external integrations
