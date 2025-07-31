@@ -64,8 +64,8 @@ export class MultiServerMCPManager extends EventEmitter {
             serverName: config.name,
             command: config.command,
             args: config.args,
-            cwd: config.cwd,
-            env: config.env
+            ...(config.cwd && { cwd: config.cwd }),
+            ...(config.env && { env: config.env })
         };
 
         const client = new GenericMCPClient(clientOptions);
@@ -115,7 +115,19 @@ export class MultiServerMCPManager extends EventEmitter {
             throw new Error(`Server ${tool.serverName} not connected`);
         }
 
-        return await client.callTool(toolName, parameters);
+        // Add cloudId automatically for Atlassian tools if not provided
+        let finalParameters = { ...parameters };
+        if (tool.serverName === "atlassian" && !finalParameters["cloudId"]) {
+            // Use environment variable for cloudId
+            const cloudId = process.env['ATLASSIAN_CLOUD_ID'];
+            if (cloudId) {
+                finalParameters["cloudId"] = cloudId;
+            } else {
+                console.warn("⚠️  ATLASSIAN_CLOUD_ID environment variable not set. Atlassian tools may fail.");
+            }
+        }
+
+        return await client.callTool(toolName, finalParameters);
     }
 
     /**

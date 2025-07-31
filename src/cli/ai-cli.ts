@@ -67,6 +67,16 @@ export class SimpleAIAtlassianCLI {
     };
     this.mcpManager.registerServer(atlassianConfig);
 
+    // Register Bitbucket server
+    const bitbucketConfig: ServerConfig = {
+      name: 'bitbucket-server',
+      command: './run_server.sh',
+      args: [],
+      cwd: '../MCPBitbucket',
+      enabled: true
+    };
+    this.mcpManager.registerServer(bitbucketConfig);
+
     // Register your database server - using environment variable for path
     const databaseConfig: ServerConfig = {
       name: 'database-server-mssql',
@@ -120,11 +130,13 @@ export class SimpleAIAtlassianCLI {
     }
 
     console.log();
-    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira, Confluence, and your database.'));
+    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira, Confluence, Bitbucket, and your database.'));
     console.log(chalk.gray('Examples:'));
     console.log(chalk.gray('  • "Show me all open tickets"'));
     console.log(chalk.gray('  • "Get details for ticket MD-1"'));
     console.log(chalk.gray('  • "List all projects"'));
+    console.log(chalk.gray('  • "Show Bitbucket repositories"'));
+    console.log(chalk.gray('  • "List pull requests"'));
     console.log(chalk.gray('  • "Query users table"'));
     console.log(chalk.gray('  • "Show database schema"'));
     console.log(chalk.gray('  • Type "help" for more commands'));
@@ -290,10 +302,11 @@ export class SimpleAIAtlassianCLI {
 
     // Group tools by server
     const toolsByServer = this.availableTools.reduce((acc, tool) => {
-      if (!acc[tool.serverName]) {
-        acc[tool.serverName] = [];
+      const serverName = tool.serverName || 'unknown';
+      if (!acc[serverName]) {
+        acc[serverName] = [];
       }
-      acc[tool.serverName].push(tool);
+      acc[serverName].push(tool);
       return acc;
     }, {} as Record<string, ToolInfo[]>);
 
