@@ -5,9 +5,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
-import { GeminiClient } from '../ai/gemini-client.js';
-import { MCPToolRouter } from '../routing/tool-router.js';
-import { MCPToolDispatcher } from '../routing/tool-dispatcher.js';
+import { GeminiClient, ToolInfo } from '../ai/gemini-client.js';
 import { AtlassianMCPClient } from '../client/atlassian-mcp-client.js';
 
 // Load environment variables
@@ -22,13 +20,11 @@ interface ConversationContext {
   currentSession: string;
 }
 
-export class AIAtlassianCLI {
+export class SimpleAIAtlassianCLI {
   private gemini: GeminiClient;
-  private router: MCPToolRouter;
   private mcpClient: AtlassianMCPClient;
-  private dispatcher: MCPToolDispatcher;
   private context: ConversationContext;
-  private cachedTools: Array<{name: string, description: string}> | null = null;
+  private availableTools: ToolInfo[] = [];
 
   constructor() {
     const geminiApiKey = process.env['GEMINI_API_KEY'];
@@ -40,9 +36,7 @@ export class AIAtlassianCLI {
     }
 
     this.gemini = new GeminiClient(geminiApiKey);
-    this.router = new MCPToolRouter();
     this.mcpClient = new AtlassianMCPClient();
-    this.dispatcher = new MCPToolDispatcher(this.mcpClient);
     this.context = {
       history: [],
       currentSession: new Date().toISOString()
@@ -50,10 +44,10 @@ export class AIAtlassianCLI {
   }
 
   async start(): Promise<void> {
-    console.log(chalk.blue.bold('🤖 AI-Powered Atlassian Assistant'));
+    console.log(chalk.blue.bold('🤖 Simple AI-Powered Atlassian Assistant'));
     console.log(chalk.gray('Connecting to services...'));
 
-    // Test connections
+    // Step 1: Test Gemini AI connection
     const spinner = ora('Testing Gemini AI connection...').start();
     const geminiOk = await this.gemini.testConnection();
     if (!geminiOk) {
@@ -62,17 +56,27 @@ export class AIAtlassianCLI {
     }
     spinner.succeed('Gemini AI connected');
 
+    // Step 2: Connect to Atlassian MCP
     const mcpSpinner = ora('Connecting to Atlassian MCP...').start();
     try {
       await this.mcpClient.connect();
       mcpSpinner.succeed('Atlassian MCP connected');
-      
-      // Cache tools once at startup for better performance
-      const toolsSpinner = ora('Loading available tools...').start();
-      this.cachedTools = await this.dispatcher.getRealMCPTools();
-      toolsSpinner.succeed(`Loaded ${this.cachedTools.length} tools`);
     } catch (error) {
       mcpSpinner.fail(`Failed to connect to Atlassian MCP: ${error}`);
+      return;
+    }
+
+    // Step 3: Get all available tools
+    const toolsSpinner = ora('Loading available MCP tools...').start();
+    try {
+      const tools = await this.mcpClient.listTools();
+      this.availableTools = tools.map((tool: any) => ({
+        name: tool.name,
+        description: tool.description || 'No description available'
+      }));
+      toolsSpinner.succeed(`Loaded ${this.availableTools.length} MCP tools`);
+    } catch (error) {
+      toolsSpinner.fail(`Failed to load tools: ${error}`);
       return;
     }
 
@@ -101,16 +105,16 @@ export class AIAtlassianCLI {
         ]);
 
         const trimmedQuery = query.trim();
-        
+
         if (!trimmedQuery) continue;
-        
+
         // Handle special commands
         if (this.handleSpecialCommands(trimmedQuery)) {
           continue;
         }
 
         await this.processQuery(trimmedQuery);
-        
+
       } catch (error) {
         if (error instanceof Error && error.name === 'ExitPromptError') {
           break;
@@ -124,134 +128,74 @@ export class AIAtlassianCLI {
 
   private handleSpecialCommands(query: string): boolean {
     const command = query.toLowerCase();
-    
+
     switch (command) {
       case 'exit':
       case 'quit':
       case 'bye':
         console.log(chalk.green('👋 Goodbye! Have a productive day!'));
         process.exit(0);
-        
+
       case 'help':
         this.showHelp();
         return true;
-        
+
       case 'history':
         this.showHistory();
         return true;
-        
+
       case 'clear':
         console.clear();
-        console.log(chalk.blue.bold('🤖 AI-Powered Atlassian Assistant'));
+        console.log(chalk.blue.bold('🤖 Simple AI-Powered Atlassian Assistant'));
         console.log(chalk.green('Ready for your questions!'));
         return true;
-        
+
       case 'tools':
         this.showAvailableTools();
         return true;
-        
+
       default:
         return false;
     }
   }
 
   private async processQuery(userQuery: string): Promise<void> {
-    const spinner = ora('🧠 Understanding your query...').start();
-    
+    const spinner = ora('🧠 Analyzing your query...').start();
+
     try {
-      // Step 1: Parse query with Gemini using cached tools (fetched at startup)
-      spinner.text = '🧠 Analyzing query with AI...';
-      const aiResponse = await this.gemini.parseQuery(userQuery, this.cachedTools || undefined);
-      
-      // Log the AI's raw decision before routing
-      console.log(`🤖 AI Decision: ${JSON.stringify({
-        intent: aiResponse.intent,
-        suggestedTool: aiResponse.suggestedTool,
-        toolParameters: aiResponse.toolParameters
-      }, null, 2)}`);
-      
-      // Check if this is a conversational query that doesn't need MCP tools
-      if (aiResponse.intent.action === 'greeting' || aiResponse.intent.action === 'conversation' || aiResponse.suggestedTool === 'none') {
-        spinner.succeed('✅ Complete!');
-        
-        // Log that AI is responding from internal knowledge (not using MCP)
-        console.log(`💭 AI Response: Using internal knowledge (no MCP tools called)`);
-        
-        let responseData;
-        let queryType = aiResponse.intent.action;
-        
-        // Handle different types of non-MCP queries
-        if (aiResponse.intent.entity === 'tools') {
-          // User is asking about available tools - use cached tools
-          responseData = {
-            tools: this.cachedTools || [],
-            message: "Here are the available MCP tools from the Atlassian server",
-            totalCount: (this.cachedTools || []).length
-          };
-          queryType = 'list';
-        } else {
-          // Regular greeting
-          responseData = { 
-            greeting: true, 
-            message: "Hello! I'm your AI assistant for Atlassian." 
-          };
-        }
-        
-        // Generate a conversational response without MCP data
-        const conversationalResponse = await this.gemini.formatResponse(
-          responseData,
-          queryType,
-          userQuery
-        );
-        
-        console.log();
-        console.log(chalk.white(conversationalResponse));
-        console.log();
-        
-        // Store in conversation history
-        this.context.history.push({
-          userQuery,
-          aiResponse: conversationalResponse,
-          timestamp: new Date()
-        });
-        
-        return;
+      // Step 1: Let AI analyze the query and decide what to do
+      spinner.text = '🧠 AI is analyzing your request...';
+      const analysis = await this.gemini.analyzeQuery(userQuery, this.availableTools);
+
+      spinner.succeed(`AI Analysis: ${analysis.reasoning}`);
+
+      let finalResponse: string;
+
+      if (analysis.shouldCallTool && analysis.toolName) {
+        // Step 2: Call the MCP tool directly
+        spinner.text = `🛠️  Calling ${analysis.toolName}...`;
+        const toolResult = await this.mcpClient.callTool(analysis.toolName, analysis.parameters || {});
+
+        // Step 3: Let AI format the response
+        spinner.text = '✨ Formatting response...';
+        finalResponse = await this.gemini.formatResponse(toolResult, userQuery);
+      } else {
+        // No tool needed, use AI's direct response
+        finalResponse = analysis.response || 'I understand your request but don\'t need to call any tools.';
       }
-      
-      // Step 2: Route to MCP tool (only for Atlassian queries)
-      spinner.text = '🔄 Routing to appropriate tool...';
-      
-      const toolCall = this.router.routeToTool(aiResponse.intent, aiResponse.toolParameters);
-      
-      // Log that AI is routing to MCP tools (vs using internal knowledge)
-      console.log(`🔗 AI Routing: ${aiResponse.intent.action} ${aiResponse.intent.entity} → ${toolCall.toolName}`);
-      
-      // Step 3: Execute MCP tool
-      spinner.text = `🛠️  Calling ${toolCall.toolName}...`;
-      const mcpResult = await this.dispatcher.callTool(toolCall.toolName, toolCall.parameters);
-      
-      // Step 4: Format response with AI
-      spinner.text = '✨ Formatting response...';
-      const formattedResponse = await this.gemini.formatResponse(
-        mcpResult, 
-        aiResponse.intent.action, 
-        userQuery
-      );
-      
-      spinner.succeed('✅ Complete!');
-      
+
       // Display the response
       console.log();
-      console.log(chalk.white(formattedResponse));
+      console.log(chalk.white(finalResponse));
       console.log();
-      
+
       // Store in conversation history
       this.context.history.push({
         userQuery,
-        aiResponse: formattedResponse,
+        aiResponse: finalResponse,
         timestamp: new Date()
       });
-      
+
     } catch (error) {
       spinner.fail('❌ Error processing query');
       console.error(chalk.red('Error:'), error);
@@ -262,14 +206,15 @@ export class AIAtlassianCLI {
   private showHelp(): void {
     console.log(chalk.blue.bold('\n📖 Help - Available Commands'));
     console.log(chalk.gray('================================='));
-    
+
     console.log(chalk.white('\n🎯 Query Examples:'));
     console.log(chalk.gray('  • "Show me all open tickets"'));
     console.log(chalk.gray('  • "Get details for ticket MD-1"'));
     console.log(chalk.gray('  • "List all projects"'));
     console.log(chalk.gray('  • "Find high priority bugs"'));
     console.log(chalk.gray('  • "Search for tickets about login"'));
-    
+    console.log(chalk.gray('  • "Hello" or "What can you do?"'));
+
     console.log(chalk.white('\n⚡ Special Commands:'));
     console.log(chalk.gray('  • help     - Show this help'));
     console.log(chalk.gray('  • history  - Show conversation history'));
@@ -282,12 +227,12 @@ export class AIAtlassianCLI {
   private showHistory(): void {
     console.log(chalk.blue.bold('\n📜 Conversation History'));
     console.log(chalk.gray('========================'));
-    
+
     if (this.context.history.length === 0) {
       console.log(chalk.gray('No conversation history yet.'));
       return;
     }
-    
+
     this.context.history.slice(-5).forEach((entry, index) => {
       console.log(chalk.cyan(`\n${index + 1}. You: ${entry.userQuery}`));
       console.log(chalk.white(`   AI: ${entry.aiResponse.slice(0, 100)}...`));
@@ -299,10 +244,10 @@ export class AIAtlassianCLI {
   private showAvailableTools(): void {
     console.log(chalk.blue.bold('\n🛠️  Available MCP Tools'));
     console.log(chalk.gray('======================='));
-    
-    const tools = this.router.getAvailableTools();
-    tools.forEach(tool => {
-      console.log(chalk.white(`  • ${tool}`));
+
+    this.availableTools.forEach(tool => {
+      console.log(chalk.white(`  • ${tool.name}`));
+      console.log(chalk.gray(`    ${tool.description}`));
     });
     console.log();
   }
@@ -322,15 +267,15 @@ export class AIAtlassianCLI {
 const program = new Command();
 
 program
-  .name('ai-atlassian')
-  .description('AI-powered natural language interface for Atlassian (Jira & Confluence)')
+  .name('simple-ai-atlassian')
+  .description('Simple AI-powered natural language interface for Atlassian (Jira & Confluence)')
   .version('1.0.0');
 
 program
   .command('chat')
   .description('Start interactive AI chat session')
   .action(async () => {
-    const cli = new AIAtlassianCLI();
+    const cli = new SimpleAIAtlassianCLI();
     await cli.start();
   });
 
@@ -341,15 +286,15 @@ program
     console.log(chalk.blue('Single query mode coming soon...'));
     console.log(chalk.gray('Question:', question));
     console.log(chalk.gray('For now, use the interactive mode with:'));
-    console.log(chalk.white('npx tsx src/cli/ai-cli.ts chat'));
+    console.log(chalk.white('npm run ai'));
   });
 
 // Default action is to start chat
 if (process.argv.length === 2) {
-  const cli = new AIAtlassianCLI();
+  const cli = new SimpleAIAtlassianCLI();
   cli.start().catch(console.error);
 } else {
   program.parse();
 }
 
-export default AIAtlassianCLI;
+export default SimpleAIAtlassianCLI;

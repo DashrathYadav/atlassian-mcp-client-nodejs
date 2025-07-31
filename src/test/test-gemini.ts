@@ -3,15 +3,14 @@
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { GeminiClient } from '../ai/gemini-client.js';
-import { MCPToolRouter } from '../routing/tool-router.js';
 
 // Load environment variables
 dotenv.config();
 
-async function testGeminiIntegration() {
-  console.log(chalk.blue.bold('🧪 Testing Gemini AI Integration'));
-  console.log(chalk.gray('================================'));
-  
+async function testSimplifiedGeminiIntegration() {
+  console.log(chalk.blue.bold('🧪 Testing Simplified Gemini AI Integration'));
+  console.log(chalk.gray('=============================================='));
+
   const geminiApiKey = process.env['GEMINI_API_KEY'];
   if (!geminiApiKey) {
     console.error(chalk.red('❌ GEMINI_API_KEY not found in environment variables'));
@@ -24,40 +23,49 @@ async function testGeminiIntegration() {
   console.log(chalk.yellow('\n1. Testing Gemini AI connection...'));
   const gemini = new GeminiClient(geminiApiKey);
   const connectionOk = await gemini.testConnection();
-  
+
   if (!connectionOk) {
     console.error(chalk.red('❌ Failed to connect to Gemini AI'));
     return;
   }
 
-  // Test 2: Query parsing
-  console.log(chalk.yellow('\n2. Testing query parsing...'));
+  // Test 2: Query analysis with mock tools
+  console.log(chalk.yellow('\n2. Testing query analysis...'));
+  const mockTools = [
+    { name: 'searchJiraIssuesUsingJql', description: 'Search Jira issues using JQL query' },
+    { name: 'getJiraIssue', description: 'Get specific ticket details by ID or key' },
+    { name: 'getVisibleJiraProjects', description: 'List all accessible Jira projects' },
+    { name: 'getConfluenceSpaces', description: 'List all accessible Confluence spaces' },
+    { name: 'searchConfluenceUsingCql', description: 'Search Confluence content using CQL' }
+  ];
+
   const testQueries = [
     'show me all open tickets',
     'get details for ticket MD-1',
     'list all projects',
-    'find high priority bugs'
+    'find high priority bugs',
+    'hello there',
+    'what can you do?'
   ];
 
   for (const query of testQueries) {
     try {
       console.log(chalk.cyan(`\nQuery: "${query}"`));
-      const aiResponse = await gemini.parseQuery(query);
-      
-      console.log(chalk.green('✅ Parsed successfully:'));
-      console.log(chalk.gray(`  Action: ${aiResponse.intent.action}`));
-      console.log(chalk.gray(`  Entity: ${aiResponse.intent.entity}`));
-      console.log(chalk.gray(`  Tool: ${aiResponse.suggestedTool}`));
-      console.log(chalk.gray(`  Confidence: ${aiResponse.intent.confidence}`));
-      
-      // Test tool routing
-      const router = new MCPToolRouter();
-      const toolCall = router.routeToTool(aiResponse.intent, aiResponse.toolParameters);
-      console.log(chalk.blue(`  → Routed to: ${toolCall.toolName}`));
-      console.log(chalk.gray(`  → Parameters: ${JSON.stringify(toolCall.parameters, null, 2)}`));
-      
+      const analysis = await gemini.analyzeQuery(query, mockTools);
+
+      console.log(chalk.green('✅ Analysis successful:'));
+      console.log(chalk.gray(`  Should call tool: ${analysis.shouldCallTool}`));
+      if (analysis.toolName) {
+        console.log(chalk.gray(`  Tool: ${analysis.toolName}`));
+        console.log(chalk.gray(`  Parameters: ${JSON.stringify(analysis.parameters)}`));
+      }
+      if (analysis.response) {
+        console.log(chalk.gray(`  Direct response: ${analysis.response}`));
+      }
+      console.log(chalk.gray(`  Reasoning: ${analysis.reasoning}`));
+
     } catch (error) {
-      console.error(chalk.red(`❌ Error parsing query "${query}":`, error));
+      console.error(chalk.red(`❌ Error analyzing query "${query}":`, error));
     }
   }
 
@@ -81,20 +89,19 @@ async function testGeminiIntegration() {
   try {
     const formattedResponse = await gemini.formatResponse(
       mockJiraData,
-      'search',
       'show me all open tickets'
     );
-    
+
     console.log(chalk.green('✅ Response formatted successfully:'));
     console.log(chalk.white(formattedResponse));
   } catch (error) {
     console.error(chalk.red('❌ Error formatting response:', error));
   }
 
-  console.log(chalk.green.bold('\n🎉 Gemini AI integration test complete!'));
-  console.log(chalk.gray('You can now run the full AI CLI with:'));
+  console.log(chalk.green.bold('\n🎉 Simplified Gemini AI integration test complete!'));
+  console.log(chalk.gray('You can now run the simplified AI CLI with:'));
   console.log(chalk.white('npm run ai'));
 }
 
 // Run the test
-testGeminiIntegration().catch(console.error);
+testSimplifiedGeminiIntegration().catch(console.error);

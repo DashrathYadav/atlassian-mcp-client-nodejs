@@ -1,18 +1,16 @@
 import { GoogleGenAI } from '@google/genai';
-import { z } from 'zod';
 
-// Define the intent schema
-export const QueryIntentSchema = z.object({
-  action: z.enum(['search', 'get', 'list', 'greeting', 'conversation']),
-  entity: z.enum(['tickets', 'projects', 'spaces', 'conversation', 'tools'])
-});
+export interface ToolInfo {
+  name: string;
+  description: string;
+}
 
-export type QueryIntent = z.infer<typeof QueryIntentSchema>;
-
-interface AIResponse {
-  intent: QueryIntent;
-  suggestedTool: string;
-  toolParameters: Record<string, any>;
+export interface AIAnalysis {
+  shouldCallTool: boolean;
+  toolName?: string;
+  parameters?: Record<string, any>;
+  response?: string;
+  reasoning: string;
 }
 
 export class GeminiClient {
@@ -24,9 +22,12 @@ export class GeminiClient {
     this.model = model;
   }
 
-  async parseQuery(userQuery: string, availableTools?: Array<{name: string, description: string}>): Promise<AIResponse> {
-    const prompt = this.createQueryParsingPrompt(userQuery, availableTools);
-    
+  /**
+   * Analyze user query and determine if a tool should be called
+   */
+  async analyzeQuery(userQuery: string, availableTools: ToolInfo[]): Promise<AIAnalysis> {
+    const prompt = this.createAnalysisPrompt(userQuery, availableTools);
+
     try {
       const response = await this.ai.models.generateContent({
         model: this.model,
@@ -43,18 +44,20 @@ export class GeminiClient {
       if (!responseText) {
         throw new Error('Empty response from Gemini');
       }
-      
-      const result = this.parseAIResponse(responseText);
-      return result;
+
+      return this.parseAnalysisResponse(responseText);
     } catch (error) {
-      console.error('Error parsing query with Gemini:', error);
-      throw new Error(`Failed to parse query: ${error}`);
+      console.error('Error analyzing query with Gemini:', error);
+      throw new Error(`Failed to analyze query: ${error}`);
     }
   }
 
-  async formatResponse(data: any, queryType: string, originalQuery: string): Promise<string> {
-    const prompt = this.createResponseFormattingPrompt(data, queryType, originalQuery);
-    
+  /**
+   * Format MCP tool response for user
+   */
+  async formatResponse(data: any, originalQuery: string): Promise<string> {
+    const prompt = this.createFormattingPrompt(data, originalQuery);
+
     try {
       const response = await this.ai.models.generateContent({
         model: this.model,
@@ -70,80 +73,93 @@ export class GeminiClient {
       if (!responseText) {
         throw new Error('Empty response from Gemini');
       }
-      
+
       return responseText;
     } catch (error) {
       console.error('Error formatting response with Gemini:', error);
-      return `Here's the raw data: ${JSON.stringify(data, null, 2)}`;
+      return `Here's the data: ${JSON.stringify(data, null, 2)}`;
     }
   }
 
-  private createQueryParsingPrompt(userQuery: string, availableTools?: Array<{name: string, description: string}>): string {
-    // Use dynamic tools if provided, otherwise fallback to hardcoded list
-    const toolsList = availableTools ? 
-      availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n') :
-      `- searchJiraIssuesUsingJql: Search Jira tickets
-- getJiraIssue: Get specific ticket details  
-- getJiraProjects: List projects
-- getConfluenceSpaces: List Confluence spaces
-- searchConfluenceContent: Search Confluence content`;
+  private createAnalysisPrompt(userQuery: string, availableTools: ToolInfo[]): string {
+    const toolsList = availableTools.map(tool =>
+      `- ${tool.name}: ${tool.description}`
+    ).join('\n');
 
-    return `You are an AI assistant that helps users retrieve data from Jira and Confluence using MCP tools.
+    return `You are an AI assistant that helps users interact with Jira and Confluence through MCP tools.
 
-User query: "${userQuery}"
+User Query: "${userQuery}"
 
-Available MCP tools:
+Available MCP Tools:
 ${toolsList}
 
-Determine the user's intent and respond with JSON:
+Your job is to:
+1. Understand what the user wants
+2. Determine if a tool should be called
+3. If yes, specify the exact tool name and parameters
+4. If no, provide a direct response
+
+Important Notes:
+- Most Atlassian tools require a "cloudId" parameter (this will be added automatically by the client)
+- For Jira search tools, use "jql" parameter with JQL query strings
+- For specific ticket lookups, use "issueIdOrKey" parameter
+- For project lookups, use "projectIdOrKey" parameter
+
+Respond with JSON only:
 {
-  "intent": {
-    "action": "search|get|list|greeting|conversation",
-    "entity": "tickets|projects|spaces|conversation|tools"
+  "shouldCallTool": true/false,
+  "toolName": "exact_tool_name_from_list_or_null",
+  "parameters": {
+    "param1": "value1",
+    "param2": "value2"
   },
-  "suggestedTool": "tool_name_or_none",
-  "toolParameters": {
-    "key": "value"
-  }
+  "response": "direct_response_if_no_tool_needed",
+  "reasoning": "brief explanation of your decision"
 }
 
-Parameter extraction examples:
-- "Get ticket MD-1" → action: "get", toolParameters: {"issueIdOrKey": "MD-1"}
-- "Show me jira tickets" → action: "search", toolParameters: {"jql": ""}
-- "List all tickets" → action: "search", toolParameters: {"jql": ""}
-- "Show me high priority bugs" → action: "search", toolParameters: {"jql": "priority = High AND type = Bug"}
-- "Search for login issues" → action: "search", toolParameters: {"jql": "summary ~ 'login'"}
-- "List all projects" → action: "list", toolParameters: {}
+Examples:
+- "Show me all open tickets" → shouldCallTool: true, toolName: "searchJiraIssuesUsingJql", parameters: {"jql": "status != Done"}
+- "Get ticket MD-1" → shouldCallTool: true, toolName: "getJiraIssue", parameters: {"issueIdOrKey": "MD-1"}
+- "List all projects" → shouldCallTool: true, toolName: "getVisibleJiraProjects", parameters: {}
+- "Find high priority bugs" → shouldCallTool: true, toolName: "searchJiraIssuesUsingJql", parameters: {"jql": "priority = High AND type = Bug"}
+- "Search for login issues" → shouldCallTool: true, toolName: "searchJiraIssuesUsingJql", parameters: {"jql": "summary ~ 'login'"}
+- "Hello" → shouldCallTool: false, response: "Hello! How can I help you with Jira or Confluence today?"
+- "What can you do?" → shouldCallTool: false, response: "I can help you search tickets, get project info, manage Confluence pages, and more. Just ask!"
 
-Important: Use "get" only when user specifies a specific ticket ID/key. Use "search" for listing or finding multiple tickets.
-
-For greetings, conversations, or questions about available tools, use suggestedTool: "none".`;
+Important: Use exact tool names from the list above. Don't include cloudId in parameters - it will be added automatically.`;
   }
 
-  private createResponseFormattingPrompt(data: any, _queryType: string, originalQuery: string): string {
-    return `You are an AI assistant that helps users retrieve data from Jira and Confluence using MCP tools.
+  private createFormattingPrompt(data: any, originalQuery: string): string {
+    return `You are an AI assistant that formats MCP tool responses for users.
 
-User asked: "${originalQuery}"
-Data received: ${JSON.stringify(data, null, 2)}
+Original Query: "${originalQuery}"
+Tool Response Data: ${JSON.stringify(data, null, 2)}
 
-Convert this data into a helpful, conversational response for the user.`;
+Convert this data into a helpful, conversational response for the user. Use emojis and formatting to make it readable.
+
+Examples:
+- For ticket lists: "Found 3 tickets: 📋 MD-1 (High Priority), 📋 MD-2 (Medium)..."
+- For single ticket: "📋 MD-1: 'Ticket Title' | Status: To Do | Priority: High"
+- For projects: "Found 2 projects: 🏗️ Project A (10 tickets), 🏗️ Project B (5 tickets)"
+- For errors: "❌ Sorry, I couldn't find that information. Please try a different query."
+
+Be conversational and helpful. If there are no results, explain that clearly.`;
   }
 
-  private parseAIResponse(responseText: string): AIResponse {
+  private parseAnalysisResponse(responseText: string): AIAnalysis {
     try {
-      // Extract JSON from response (in case there's extra text)
+      // Extract JSON from response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       const jsonText = jsonMatch ? jsonMatch[0] : responseText;
-      
+
       const parsed = JSON.parse(jsonText);
-      
-      // Validate the intent structure
-      const validatedIntent = QueryIntentSchema.parse(parsed.intent);
-      
+
       return {
-        intent: validatedIntent,
-        suggestedTool: parsed.suggestedTool || 'unknown',
-        toolParameters: parsed.toolParameters || {}
+        shouldCallTool: parsed.shouldCallTool || false,
+        toolName: parsed.toolName,
+        parameters: parsed.parameters || {},
+        response: parsed.response,
+        reasoning: parsed.reasoning || 'No reasoning provided'
       };
     } catch (error) {
       console.error('Error parsing AI response:', error);
@@ -157,7 +173,7 @@ Convert this data into a helpful, conversational response for the user.`;
         model: this.model,
         contents: 'Say "Hello from Gemini AI!"'
       });
-      
+
       console.log('✅ Gemini AI connection successful:', response.text);
       return true;
     } catch (error) {
