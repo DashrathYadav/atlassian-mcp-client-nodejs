@@ -23,7 +23,7 @@ async function setupAuth() {
 
     console.log('📋 Prerequisites:');
     console.log('1. You need to create an OAuth app in the Atlassian Developer Console');
-    console.log('2. You need a Google Gemini API key');
+    console.log('2. You need AWS credentials with Bedrock access');
     console.log('3. See AUTHENTICATION_SETUP.md for detailed instructions\n');
 
     const continueSetup = await question('Do you have your OAuth credentials ready? (y/n): ');
@@ -47,8 +47,9 @@ async function setupAuth() {
     const clientId = await question('Enter your OAuth Client ID: ');
     const clientSecret = await question('Enter your OAuth Client Secret: ');
 
-    // Get Gemini API key
-    const geminiKey = await question('Enter your Google Gemini API key: ');
+    // Get AWS credentials
+    const awsAccessKey = await question('Enter your AWS Access Key ID: ');
+    const awsSecretKey = await question('Enter your AWS Secret Access Key: ');
 
     // Optional settings
     const port = await question('Enter callback port (default: 3000): ') || '3000';
@@ -61,8 +62,10 @@ ATLASSIAN_CLIENT_ID=${clientId}
 ATLASSIAN_CLIENT_SECRET=${clientSecret}
 ATLASSIAN_REDIRECT_URI=http://localhost:${port}/callback
 
-# Google Gemini AI (for AI features)
-GEMINI_API_KEY=${geminiKey}
+# AWS Bedrock (for AI features)
+AWS_ACCESS_KEY_ID=${awsAccessKey}
+AWS_SECRET_ACCESS_KEY=${awsSecretKey}
+AWS_REGION=ap-south-1
 
 # Optional Configuration
 PORT=${port}

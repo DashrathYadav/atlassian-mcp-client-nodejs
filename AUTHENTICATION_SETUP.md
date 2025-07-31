@@ -63,8 +63,10 @@ ATLASSIAN_CLIENT_ID=your-client-id-from-step-1
 ATLASSIAN_CLIENT_SECRET=your-client-secret-from-step-1
 ATLASSIAN_REDIRECT_URI=http://localhost:3000/callback
 
-# Google Gemini AI (for AI features)
-GEMINI_API_KEY=your-gemini-api-key
+# AWS Bedrock (for AI features with cross-region inference)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=ap-south-1
 
 # Optional Configuration
 PORT=3000
@@ -77,7 +79,8 @@ DEBUG_MODE=false
 - **`your-site.atlassian.net`**: Your Atlassian Cloud instance URL
 - **`your-client-id-from-step-1`**: The Client ID from Step 1.4
 - **`your-client-secret-from-step-1`**: The Client Secret from Step 1.4
-- **`your-gemini-api-key`**: Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- **`your-aws-access-key`**: Get from AWS IAM Console
+- **`your-aws-secret-key`**: Get from AWS IAM Console
 
 ## Step 3: Test Authentication
 
@@ -86,6 +89,9 @@ DEBUG_MODE=false
 ```bash
 # Test OAuth authentication
 npm run auth:test
+
+# Test AWS Bedrock integration
+npm run test:bedrock
 
 # Or run the debug script directly
 npx tsx debug-oauth.ts
@@ -144,10 +150,16 @@ npm run ai
 - Verify the callback URL matches exactly: `http://localhost:3000/callback`
 - Ensure all required scopes are added to your OAuth app
 
-#### 4. "Port 3000 already in use"
+#### 4. "AWS credentials not found"
+**Solutions**:
+- Ensure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set
+- Verify your AWS credentials have Bedrock permissions
+- Check that your AWS region supports Claude Sonnet 4 with cross-region inference
+
+#### 5. "Port 3000 already in use"
 **Solution**: Change the PORT in your `.env` file to another port (e.g., 3001)
 
-#### 5. "MCP connection failed"
+#### 6. "MCP connection failed"
 **Solutions**:
 - Ensure your OAuth app has the correct scopes
 - Check that your Atlassian instance supports the MCP server

@@ -23,7 +23,7 @@ Create a natural language interface where users can ask questions about Jira/Con
 ### 1. **AI Query Parser**
 
 - **Purpose**: Analyze user's natural language query
-- **Technology**: Google Gemini AI via @google/genai SDK
+- **Technology**: AWS Bedrock Claude Sonnet 4 via @aws-sdk/client-bedrock-runtime
 - **Input**: "Show me all high priority tickets assigned to John"
 - **Output**: Structured intent + parameters
 
@@ -56,7 +56,7 @@ Create a natural language interface where users can ask questions about Jira/Con
 
 ### Phase 2: AI Integration (Week 2)
 
-1. Implement Google Gemini AI integration using @google/genai
+1. Implement AWS Bedrock Claude Sonnet 4 integration using @aws-sdk/client-bedrock-runtime
 2. Create prompt templates for query parsing
 3. Add response formatting prompts
 4. Build conversation context management
@@ -143,7 +143,7 @@ Formatter: "Created bug ticket MD-5: 'Login Issues' in To Do status."
 ### Core Technologies
 
 - **Node.js/TypeScript**: Main runtime
-- **AI/LLM**: Google Gemini AI via @google/genai SDK
+- **AI/LLM**: AWS Bedrock Claude Sonnet 4 via @aws-sdk/client-bedrock-runtime
 - **MCP Client**: Existing Atlassian MCP Client
 - **CLI Framework**: Commander.js or Yargs
 - **Validation**: Zod for schema validation

@@ -1,10 +1,11 @@
 # Atlassian MCP Client
 
-A simple and elegant AI-powered Model Context Protocol (MCP) client for Atlassian's Remote MCP Server. This client provides direct access to Jira and Confluence through natural language queries, leveraging Google Gemini AI for intelligent decision-making and multi-step execution.
+A simple and elegant AI-powered Model Context Protocol (MCP) client for Atlassian's Remote MCP Server. This client provides direct access to Jira and Confluence through natural language queries, leveraging AWS Bedrock Claude Sonnet 4 for intelligent decision-making and multi-step execution.
 
 ## 🚀 Features
 
-- **AI-Powered Queries**: Natural language interaction with Jira and Confluence
+- **AI-Powered Queries**: Natural language interaction with Jira and Confluence using Claude Sonnet 4
+- **Cross-Region Inference**: Leverages AWS Bedrock's cross-region inference for better performance and reliability
 - **Dynamic Tool Discovery**: Automatically discovers available MCP tools
 - **Simple and Clean Interface**: Easy-to-use CLI for Atlassian operations
 - **Error Recovery**: AI-powered error detection and recovery suggestions
@@ -14,8 +15,9 @@ A simple and elegant AI-powered Model Context Protocol (MCP) client for Atlassia
 ### Prerequisites
 
 1. **Atlassian OAuth App**: Create an OAuth app in your Atlassian Cloud instance
-2. **Google Gemini API Key**: Get an API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-3. **Node.js 18+**: Ensure you have Node.js 18 or higher installed
+2. **AWS Bedrock Access**: Ensure you have access to AWS Bedrock with Claude Sonnet 4 (using cross-region inference for APAC)
+3. **AWS Credentials**: Configure AWS access keys with Bedrock permissions
+4. **Node.js 18+**: Ensure you have Node.js 18 or higher installed
 
 ### Installation
 
@@ -60,7 +62,7 @@ npm run connect
 npm run tools
 
 # Test AI integration
-npm run test:gemini
+npm run test:bedrock
 
 
 ```
@@ -91,7 +93,9 @@ The AI automatically selects the appropriate MCP tools based on your query:
 
 ```bash
 # Required
-GEMINI_API_KEY=your-gemini-api-key
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=ap-south-1
 
 # Atlassian OAuth (for mcp-remote)
 ATLASSIAN_CLIENT_ID=your-client-id
@@ -123,22 +127,22 @@ The client uses the official `mcp-remote` proxy to handle OAuth authentication a
 ### Core Components
 
 1. **SimpleAIAtlassianCLI**: Main interface for AI-powered interactions
-2. **GeminiClient**: AI capabilities for query analysis and response formatting
+2. **BedrockClient**: AI capabilities for query analysis and response formatting using Claude Sonnet 4 (with cross-region inference)
 3. **AtlassianMCPClient**: Direct MCP tool communication
 
 ### Data Flow
 
 1. **User Query** → SimpleAIAtlassianCLI
-2. **AI Analysis** → GeminiClient.analyzeQuery()
+2. **AI Analysis** → BedrockClient.analyzeQuery()
 3. **Tool Execution** → AtlassianMCPClient.callTool()
-4. **Response Formatting** → GeminiClient.formatResponse()
+4. **Response Formatting** → BedrockClient.formatResponse()
 5. **User Response** → Display formatted result
 
 ## 🧪 Testing
 
 ```bash
 # Test basic AI integration
-npm run test:gemini
+npm run test:bedrock
 
 # Test MCP connection
 npm run connect
@@ -151,7 +155,7 @@ npm run tools
 
 ### Common Issues
 
-1. **GEMINI_API_KEY not found**
+1. **AWS credentials not found**
    - Ensure the environment variable is set correctly
    - Check that the API key is valid
 
@@ -192,8 +196,21 @@ export DEBUG=atlassian-mcp-client:*
 
 MIT License - see LICENSE file for details.
 
+## 🎯 **Key Benefits of Claude Sonnet 4 with Cross-Region Inference**
+
+Based on the [AWS blog articles](https://aws.amazon.com/blogs/aws/claude-opus-4-anthropics-most-powerful-model-for-coding-is-now-in-amazon-bedrock/) and [cross-region inference guide](https://aws.amazon.com/blogs/machine-learning/getting-started-with-cross-region-inference-in-amazon-bedrock/):
+
+- **Optimized for efficiency at scale** - perfect for production workloads
+- **Enhanced performance** for code reviews, bug fixes, and feature development
+- **Hybrid reasoning models** with near-instant responses and extended thinking
+- **Cross-region inference** - automatically routes requests across APAC regions for better throughput
+- **Up to double the default in-region quotas** when using cross-region inference
+- **No additional cost** - same pricing as in-region inference
+- **Automatic failover** - if one region is busy, requests are routed to available regions
+- **Available in APAC regions** including your `ap-south-1` region with `apac.` prefix
+
 ## 🙏 Acknowledgments
 
 - Atlassian for the MCP server and `mcp-remote` proxy
-- Google for the Gemini AI API
+- AWS for the Bedrock Claude Sonnet 4 API with cross-region inference
 - The MCP community for the protocol specification

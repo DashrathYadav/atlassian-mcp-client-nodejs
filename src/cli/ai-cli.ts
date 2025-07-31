@@ -5,7 +5,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
-import { GeminiClient, ToolInfo } from '../ai/gemini-client.js';
+import { BedrockClient, ToolInfo, BedrockConfig } from '../ai/bedrock-client.js';
 import { AtlassianMCPClient } from '../client/atlassian-mcp-client.js';
 
 // Load environment variables
@@ -21,21 +21,32 @@ interface ConversationContext {
 }
 
 export class SimpleAIAtlassianCLI {
-  private gemini: GeminiClient;
+  private bedrock: BedrockClient;
   private mcpClient: AtlassianMCPClient;
   private context: ConversationContext;
   private availableTools: ToolInfo[] = [];
 
   constructor() {
-    const geminiApiKey = process.env['GEMINI_API_KEY'];
-    if (!geminiApiKey) {
-      console.error(chalk.red('❌ GEMINI_API_KEY not found in environment variables'));
-      console.log(chalk.yellow('Please add your Gemini API key to .env file:'));
-      console.log(chalk.gray('GEMINI_API_KEY=your-api-key-here'));
+    const region = process.env['AWS_REGION'] || 'ap-south-1';
+    const accessKeyId = process.env['AWS_ACCESS_KEY_ID'];
+    const secretAccessKey = process.env['AWS_SECRET_ACCESS_KEY'];
+
+    if (!accessKeyId || !secretAccessKey) {
+      console.error(chalk.red('❌ AWS credentials not found in environment variables'));
+      console.log(chalk.yellow('Please add your AWS credentials to .env file:'));
+      console.log(chalk.gray('AWS_ACCESS_KEY_ID=your-access-key'));
+      console.log(chalk.gray('AWS_SECRET_ACCESS_KEY=your-secret-key'));
+      console.log(chalk.gray('AWS_REGION=ap-south-1 (optional, defaults to ap-south-1)'));
       process.exit(1);
     }
 
-    this.gemini = new GeminiClient(geminiApiKey);
+    const config: BedrockConfig = {
+      region,
+      accessKeyId,
+      secretAccessKey
+    };
+
+    this.bedrock = new BedrockClient(config);
     this.mcpClient = new AtlassianMCPClient();
     this.context = {
       history: [],
@@ -47,14 +58,14 @@ export class SimpleAIAtlassianCLI {
     console.log(chalk.blue.bold('🤖 Simple AI-Powered Atlassian Assistant'));
     console.log(chalk.gray('Connecting to services...'));
 
-    // Step 1: Test Gemini AI connection
-    const spinner = ora('Testing Gemini AI connection...').start();
-    const geminiOk = await this.gemini.testConnection();
-    if (!geminiOk) {
-      spinner.fail('Failed to connect to Gemini AI');
+    // Step 1: Test AWS Bedrock connection
+    const spinner = ora('Testing AWS Bedrock connection...').start();
+    const bedrockOk = await this.bedrock.testConnection();
+    if (!bedrockOk) {
+      spinner.fail('Failed to connect to AWS Bedrock');
       return;
     }
-    spinner.succeed('Gemini AI connected');
+    spinner.succeed('AWS Bedrock connected');
 
     // Step 2: Connect to Atlassian MCP
     const mcpSpinner = ora('Connecting to Atlassian MCP...').start();
@@ -165,7 +176,7 @@ export class SimpleAIAtlassianCLI {
     try {
       // Step 1: Let AI analyze the query and decide what to do
       spinner.text = '🧠 AI is analyzing your request...';
-      const analysis = await this.gemini.analyzeQuery(userQuery, this.availableTools);
+      const analysis = await this.bedrock.analyzeQuery(userQuery, this.availableTools);
 
       spinner.succeed(`AI Analysis: ${analysis.reasoning}`);
 
@@ -178,7 +189,7 @@ export class SimpleAIAtlassianCLI {
 
         // Step 3: Let AI format the response
         spinner.text = '✨ Formatting response...';
-        finalResponse = await this.gemini.formatResponse(toolResult, userQuery);
+        finalResponse = await this.bedrock.formatResponse(toolResult, userQuery);
       } else {
         // No tool needed, use AI's direct response
         finalResponse = analysis.response || 'I understand your request but don\'t need to call any tools.';
