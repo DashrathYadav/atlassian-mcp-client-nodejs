@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { BedrockClient, BedrockConfig } from '../ai/bedrock-client.js';
 import { KnowledgeHubClient, KnowledgeHubConfig } from '../ai/knowledge-hub-client.js';
 import { MultiServerMCPManager } from '../client/multi-server-mcp-manager.js';
-import { SmartDispatcher } from '../routing/smart-dispatcher.js';
+import { EnhancedToolDispatcher } from '../routing/enhanced-tool-dispatcher.js';
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +24,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let bedrock: BedrockClient;
 let knowledgeHub: KnowledgeHubClient;
 let mcpManager: MultiServerMCPManager;
-let dispatcher: any; // Change type to SmartDispatcher
+let dispatcher: EnhancedToolDispatcher;
 
 async function initializeServices() {
   try {
@@ -87,8 +87,8 @@ async function initializeServices() {
       knowledgeHub = new KnowledgeHubClient(khConfig);
     }
 
-    // Initialize Smart Dispatcher
-    dispatcher = new SmartDispatcher(mcpManager, knowledgeHub, bedrock);
+    // Initialize Enhanced Tool Dispatcher (Normal AI)
+    dispatcher = new EnhancedToolDispatcher(mcpManager, knowledgeHub, bedrock);
 
     // Connect to MCP servers
     await mcpManager.connectToAllServers();
