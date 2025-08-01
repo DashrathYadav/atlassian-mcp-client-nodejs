@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { BedrockClient, BedrockConfig } from '../ai/bedrock-client.js';
 import { KnowledgeHubClient, KnowledgeHubConfig } from '../ai/knowledge-hub-client.js';
 import { MultiServerMCPManager } from '../client/multi-server-mcp-manager.js';
-import { EnhancedToolDispatcher } from '../routing/enhanced-tool-dispatcher.js';
+import { SmartDispatcher } from '../routing/smart-dispatcher.js';
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +24,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let bedrock: BedrockClient;
 let knowledgeHub: KnowledgeHubClient;
 let mcpManager: MultiServerMCPManager;
-let dispatcher: EnhancedToolDispatcher;
+let dispatcher: any; // Change type to SmartDispatcher
 
 async function initializeServices() {
   try {
@@ -40,7 +40,7 @@ async function initializeServices() {
 
     // Initialize MCP Manager
     mcpManager = new MultiServerMCPManager();
-    
+
     // Register servers
     const atlassianConfig = {
       name: 'atlassian',
@@ -87,8 +87,8 @@ async function initializeServices() {
       knowledgeHub = new KnowledgeHubClient(khConfig);
     }
 
-    // Initialize Enhanced Dispatcher
-    dispatcher = new EnhancedToolDispatcher(mcpManager, knowledgeHub, bedrock);
+    // Initialize Smart Dispatcher
+    dispatcher = new SmartDispatcher(mcpManager, knowledgeHub, bedrock);
 
     // Connect to MCP servers
     await mcpManager.connectToAllServers();
@@ -126,26 +126,26 @@ app.get('/', (req, res) => {
 app.post('/api/query', async (req, res) => {
   try {
     const { prompt } = req.body;
-    
+
     if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ 
-        error: 'Invalid prompt. Please provide a valid string.' 
+      return res.status(400).json({
+        error: 'Invalid prompt. Please provide a valid string.'
       });
     }
 
     console.log(`🤖 Processing query: "${prompt}"`);
-    
+
     const response = await dispatcher.processQuery(prompt);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       response,
       timestamp: new Date().toISOString()
     });
-    
+
   } catch (error) {
     console.error('Error processing query:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to process query. Please try again.',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -182,7 +182,7 @@ app.get('/api/status', async (req, res) => {
 
     res.json(status);
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to get status',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -192,7 +192,7 @@ app.get('/api/status', async (req, res) => {
 // Start server
 async function startServer() {
   const servicesReady = await initializeServices();
-  
+
   if (!servicesReady) {
     console.error('❌ Failed to initialize services. Exiting...');
     process.exit(1);
