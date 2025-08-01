@@ -1,78 +1,91 @@
 // UI State
 let isProcessing = false;
+let isDarkMode = false;
 
 // DOM Elements
-const promptInput = document.getElementById('prompt-input');
-const sendButton = document.getElementById('send-button');
-const chatHistory = document.getElementById('chat-history');
+const searchInput = document.getElementById('search-input');
+const searchButton = document.getElementById('search-button');
+const infoContent = document.getElementById('info-content');
 const loadingContainer = document.getElementById('loading');
-const exampleButtons = document.querySelectorAll('.example-btn');
-const statusIndicators = {
-    bedrock: document.getElementById('bedrock-status'),
-    knowledgeHub: document.getElementById('knowledge-hub-status'),
-    mcp: document.getElementById('mcp-status')
-};
+const toggleInput = document.getElementById('toggle');
+const body = document.body;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     initializeUI();
     checkServerStatus();
-    setWelcomeTime();
+    initializeTheme();
 });
 
 function initializeUI() {
-    // Set welcome time
-    setWelcomeTime();
-    
     // Add event listeners
-    sendButton.addEventListener('click', handleSendMessage);
-    promptInput.addEventListener('keydown', handleKeyPress);
+    searchInput.addEventListener('keydown', handleKeyPress);
+    searchInput.addEventListener('input', handleSearchInput);
+    searchButton.addEventListener('click', handleSearch);
     
-    // Add example button listeners
-    exampleButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const prompt = this.getAttribute('data-prompt');
-            promptInput.value = prompt;
-            promptInput.focus();
-        });
-    });
+    // Add toggle switch listener
+    toggleInput.addEventListener('change', handleToggleChange);
     
-    // Auto-resize textarea
-    promptInput.addEventListener('input', autoResizeTextarea);
+    // Focus on search input
+    searchInput.focus();
 }
 
-function setWelcomeTime() {
-    const welcomeTime = document.getElementById('welcome-time');
-    if (welcomeTime) {
-        welcomeTime.textContent = new Date().toLocaleTimeString();
+function initializeTheme() {
+    // Check for saved theme preference or default to light mode
+    const savedTheme = localStorage.getItem('pinelens-theme');
+    if (savedTheme === 'dark') {
+        isDarkMode = true;
+        toggleInput.checked = true;
+        enableDarkMode();
+    } else {
+        isDarkMode = false;
+        toggleInput.checked = false;
+        enableLightMode();
     }
-}
-
-function autoResizeTextarea() {
-    promptInput.style.height = 'auto';
-    promptInput.style.height = Math.min(promptInput.scrollHeight, 200) + 'px';
 }
 
 function handleKeyPress(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter') {
         event.preventDefault();
-        handleSendMessage();
+        handleSearch();
     }
 }
 
-async function handleSendMessage() {
-    const prompt = promptInput.value.trim();
+function handleSearchInput(event) {
+    // Real-time search functionality can be added here
+    // For now, we'll just handle Enter key
+}
+
+function handleToggleChange(event) {
+    // Handle theme toggle
+    isDarkMode = event.target.checked;
     
-    if (!prompt || isProcessing) {
+    if (isDarkMode) {
+        enableDarkMode();
+        localStorage.setItem('pinelens-theme', 'dark');
+    } else {
+        enableLightMode();
+        localStorage.setItem('pinelens-theme', 'light');
+    }
+}
+
+function enableDarkMode() {
+    body.classList.add('dark-mode');
+    body.classList.remove('light-mode');
+}
+
+function enableLightMode() {
+    body.classList.add('light-mode');
+    body.classList.remove('dark-mode');
+}
+
+async function handleSearch() {
+    const query = searchInput.value.trim();
+    
+    if (!query || isProcessing) {
         return;
     }
     
-    // Add user message to chat
-    addMessageToChat('user', prompt);
-    
-    // Clear input and disable send button
-    promptInput.value = '';
-    promptInput.style.height = 'auto';
     setProcessingState(true);
     
     try {
@@ -80,53 +93,56 @@ async function handleSendMessage() {
         showLoading();
         
         // Send request to server
-        const response = await sendQueryToServer(prompt);
+        const response = await sendQueryToServer(query);
         
         // Hide loading
         hideLoading();
         
-        // Add AI response to chat
-        addMessageToChat('ai', response);
+        // Update information display
+        updateInfoDisplay(response);
+        
+        // Clear the search input after successful search
+        searchInput.value = '';
         
     } catch (error) {
         hideLoading();
-        console.error('Error processing message:', error);
+        console.error('Error processing search:', error);
         
-        // Add error message
-        addMessageToChat('ai', `Sorry, I encountered an error while processing your request: ${error.message || 'Unknown error'}. Please try again.`);
+        // Show error in info display
+        updateInfoDisplay(`Sorry, I encountered an error while processing your search: ${error.message || 'Unknown error'}. Please try again.`);
+        
+        // Clear the search input even on error
+        searchInput.value = '';
     } finally {
         setProcessingState(false);
-        promptInput.focus();
+        // Refocus on search input after clearing
+        searchInput.focus();
     }
 }
 
 function setProcessingState(processing) {
     isProcessing = processing;
-    sendButton.disabled = processing;
-    
-    if (processing) {
-        sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    } else {
-        sendButton.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
-    }
+    searchInput.disabled = processing;
+    searchButton.disabled = processing;
 }
 
 function showLoading() {
     loadingContainer.style.display = 'block';
-    scrollToBottom();
+    infoContent.style.display = 'none';
 }
 
 function hideLoading() {
     loadingContainer.style.display = 'none';
+    infoContent.style.display = 'block';
 }
 
-async function sendQueryToServer(prompt) {
+async function sendQueryToServer(query) {
     const response = await fetch('/api/query', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt: query })
     });
     
     if (!response.ok) {
@@ -138,58 +154,23 @@ async function sendQueryToServer(prompt) {
     return data.response;
 }
 
-function addMessageToChat(sender, content) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}-message`;
+function updateInfoDisplay(content) {
+    // Format the content for display
+    const formattedContent = formatContent(content);
     
-    const avatar = document.createElement('div');
-    avatar.className = 'message-avatar';
+    // Update the info content
+    infoContent.innerHTML = formattedContent;
     
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'message-header';
-    
-    const senderSpan = document.createElement('span');
-    senderSpan.className = 'message-sender';
-    senderSpan.textContent = sender === 'user' ? 'You' : 'AI Assistant';
-    
-    const timeSpan = document.createElement('span');
-    timeSpan.className = 'message-time';
-    timeSpan.textContent = new Date().toLocaleTimeString();
-    
-    const textDiv = document.createElement('div');
-    textDiv.className = 'message-text';
-    
-    // Format the content (handle line breaks, lists, etc.)
-    textDiv.innerHTML = formatMessageContent(content);
-    
-    // Assemble the message
-    headerDiv.appendChild(senderSpan);
-    headerDiv.appendChild(timeSpan);
-    contentDiv.appendChild(headerDiv);
-    contentDiv.appendChild(textDiv);
-    
-    if (sender === 'user') {
-        avatar.innerHTML = '<i class="fas fa-user"></i>';
-    } else {
-        avatar.innerHTML = '<i class="fas fa-robot"></i>';
-    }
-    
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
-    
-    // Add to chat history
-    chatHistory.appendChild(messageDiv);
-    
-    // Scroll to bottom
-    scrollToBottom();
+    // Add a subtle animation
+    infoContent.style.opacity = '0';
+    setTimeout(() => {
+        infoContent.style.opacity = '1';
+    }, 50);
 }
 
-function formatMessageContent(content) {
+function formatContent(content) {
     // Handle line breaks
-    let formatted = content.replace(/\n/g, '<br>');
+    let formatted = content.replace(/\n/g, '</p><p>');
     
     // Handle basic markdown-style formatting
     formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -202,13 +183,12 @@ function formatMessageContent(content) {
     formatted = formatted.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
     formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     
+    // Wrap in paragraph tags if not already wrapped
+    if (!formatted.startsWith('<p>')) {
+        formatted = '<p>' + formatted + '</p>';
+    }
+    
     return formatted;
-}
-
-function scrollToBottom() {
-    setTimeout(() => {
-        chatHistory.scrollTop = chatHistory.scrollHeight;
-    }, 100);
 }
 
 async function checkServerStatus() {
@@ -216,34 +196,11 @@ async function checkServerStatus() {
         const response = await fetch('/api/status');
         if (response.ok) {
             const status = await response.json();
-            updateStatusIndicators(status);
+            // You can add status indicators here if needed
+            console.log('Server status:', status);
         }
     } catch (error) {
         console.error('Failed to check server status:', error);
-        // Mark all as disconnected if we can't reach the server
-        updateStatusIndicators({
-            bedrock: false,
-            knowledgeHub: false,
-            mcpServers: []
-        });
-    }
-}
-
-function updateStatusIndicators(status) {
-    // Update Bedrock status
-    if (statusIndicators.bedrock) {
-        statusIndicators.bedrock.classList.toggle('connected', status.bedrock);
-    }
-    
-    // Update Knowledge Hub status
-    if (statusIndicators.knowledgeHub) {
-        statusIndicators.knowledgeHub.classList.toggle('connected', status.knowledgeHub);
-    }
-    
-    // Update MCP status
-    if (statusIndicators.mcp) {
-        const hasMcpServers = status.mcpServers && status.mcpServers.length > 0;
-        statusIndicators.mcp.classList.toggle('connected', hasMcpServers);
     }
 }
 
@@ -260,4 +217,19 @@ document.addEventListener('visibilitychange', function() {
 // Handle window focus
 window.addEventListener('focus', function() {
     checkServerStatus();
-}); 
+});
+
+// Add some example queries for demonstration
+const exampleQueries = [
+    "Show me all open tickets",
+    "What are our API specifications?",
+    "Tell me about Amadeus integration",
+    "Query users table",
+    "List all projects"
+];
+
+// You can add a function to populate example queries if needed
+function populateExampleQueries() {
+    // This could be used to show example queries in the UI
+    console.log('Available example queries:', exampleQueries);
+} 

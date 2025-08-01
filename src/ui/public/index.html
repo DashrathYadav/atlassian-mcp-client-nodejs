@@ -1,59 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Assistant - Multi-Server MCP Client</title>
+    <title>PineLens - Unified Search Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1><i class="fas fa-robot"></i> AI Assistant</h1>
-                <p>Multi-Server MCP Client with Knowledge Hub Integration</p>
-                <div class="status-indicators">
-                    <div class="status-item" id="bedrock-status">
-                        <i class="fas fa-circle"></i>
-                        <span>Bedrock</span>
-                    </div>
-                    <div class="status-item" id="knowledge-hub-status">
-                        <i class="fas fa-circle"></i>
-                        <span>Knowledge Hub</span>
-                    </div>
-                    <div class="status-item" id="mcp-status">
-                        <i class="fas fa-circle"></i>
-                        <span>MCP Servers</span>
-                    </div>
+                <div class="logo">
+                    <div class="pine-icon">🌲</div>
+                    <span class="app-name">PineLens</span>
+                </div>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="toggle" class="toggle-input">
+                    <label for="toggle" class="toggle-label"></label>
                 </div>
             </div>
         </header>
 
         <!-- Main Content -->
         <main class="main-content">
-            <!-- Input Section -->
-            <div class="input-section">
-                <div class="input-container">
-                    <textarea 
-                        id="prompt-input" 
-                        placeholder="Ask me anything about Jira, Confluence, Bitbucket, database, or organizational knowledge..."
-                        rows="3"
-                    ></textarea>
-                    <button id="send-button" class="send-button">
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-bar">
+                    <i class="fas fa-search search-icon-left"></i>
+                    <input type="text" id="search-input" class="search-input" placeholder="Search" autocomplete="off">
+                    <button type="button" id="search-button" class="search-icon-right">
                         <i class="fas fa-paper-plane"></i>
-                        Send
                     </button>
                 </div>
-                <div class="example-prompts">
-                    <p><strong>Example prompts:</strong></p>
-                    <div class="prompt-examples">
-                        <button class="example-btn" data-prompt="Show me all open tickets">Show me all open tickets</button>
-                        <button class="example-btn" data-prompt="What are our API specifications?">What are our API specifications?</button>
-                        <button class="example-btn" data-prompt="Tell me about Amadeus integration">Tell me about Amadeus integration</button>
-                        <button class="example-btn" data-prompt="Query users table">Query users table</button>
-                        <button class="example-btn" data-prompt="List all projects">List all projects</button>
+            </div>
+
+            <!-- Information Display Area -->
+            <div class="info-container">
+                <div class="info-box">
+                    <div class="info-header">
+                        <div class="diamond-icon">◆</div>
+                        <span class="info-title">Sure! Here's some information based on your query.</span>
+                    </div>
+                    <div class="info-content" id="info-content">
+                        <p>A generic query is a search term that requires a specific term, or context— an example. For
+                            example, for. e, "weather" instead of e.g. a citl or à date.</p>
+                        <p>Generic queries usually tend to produce broader results, hoviewer, are t less specific, are
+                            needed to give information in need to be interpreted. For example, so require user detalled
+                            search ter,</p>
+                        <p>To encourage, use g more precise or detalled sorts to senrirow-don results to narrow your
+                            search.</p>
                     </div>
                 </div>
             </div>
@@ -63,45 +62,12 @@
                 <div class="loading-spinner">
                     <i class="fas fa-spinner fa-spin"></i>
                 </div>
-                <p>AI is thinking...</p>
-            </div>
-
-            <!-- Chat History -->
-            <div class="chat-container">
-                <div id="chat-history" class="chat-history">
-                    <!-- Welcome message -->
-                    <div class="message ai-message">
-                        <div class="message-avatar">
-                            <i class="fas fa-robot"></i>
-                        </div>
-                        <div class="message-content">
-                            <div class="message-header">
-                                <span class="message-sender">AI Assistant</span>
-                                <span class="message-time" id="welcome-time"></span>
-                            </div>
-                            <div class="message-text">
-                                <p>Hello! I'm your AI assistant powered by AWS Bedrock. I can help you with:</p>
-                                <ul>
-                                    <li><strong>Jira:</strong> Search tickets, get project info, manage issues</li>
-                                    <li><strong>Confluence:</strong> Find pages, manage content</li>
-                                    <li><strong>Bitbucket:</strong> Repository and pull request management</li>
-                                    <li><strong>Database:</strong> Query and explore your MSSQL database</li>
-                                    <li><strong>Knowledge Hub:</strong> Access organizational knowledge, API specs, policies</li>
-                                </ul>
-                                <p>Just type your question above and I'll help you find the information you need!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <p>Searching...</p>
             </div>
         </main>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>&copy; 2024 AI Assistant - Multi-Server MCP Client</p>
-        </footer>
     </div>
 
     <script src="script.js"></script>
 </body>
-</html> 
+
+</html>

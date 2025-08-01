@@ -19,7 +19,7 @@
     "test:multi-server": "tsx src/demo/test-multi-server.ts",
     "test:knowledge-hub": "tsx src/test/test-knowledge-hub.ts",
     "ui": "tsx src/ui/server.ts",
-    "ui:test": "tsx src/ui/test-ui.ts",
+    "ui:test": "tsx test-pinelens-ui.ts",
     "test:path": "node test-path.js",
     "connect": "tsx src/index.ts connect",
     "tools": "tsx src/index.ts tools",
