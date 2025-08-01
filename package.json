@@ -18,6 +18,8 @@
     "test:enhanced": "tsx src/test/test-enhanced-ai.ts",
     "test:multi-server": "tsx src/demo/test-multi-server.ts",
     "test:knowledge-hub": "tsx src/test/test-knowledge-hub.ts",
+    "ui": "tsx src/ui/server.ts",
+    "ui:test": "tsx src/ui/test-ui.ts",
     "test:path": "node test-path.js",
     "connect": "tsx src/index.ts connect",
     "tools": "tsx src/index.ts tools",
@@ -49,6 +51,7 @@
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
     "dotenv": "^17.2.1",
+    "express": "^4.21.2",
     "inquirer": "^9.2.12",
     "ora": "^7.0.1",
     "tsx": "^4.6.2"
