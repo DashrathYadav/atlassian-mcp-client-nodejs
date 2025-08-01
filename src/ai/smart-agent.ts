@@ -103,7 +103,15 @@ export class SmartAgent {
         try {
             switch (step.type) {
                 case 'mcp_call':
-                    if (step.tool) step.result = await this.mcpManager.callTool(step.tool, step.parameters || {});
+                    if (step.tool) {
+                        step.result = await this.mcpManager.callTool(step.tool, step.parameters || {});
+                        // Analyze the result for completeness
+                        const analysis = this.analyzeDataCompleteness(step.result, context.userQuery);
+                        console.log(`Step ${step.id} result: ${analysis.dataType} (${analysis.itemCount} items) - Complete: ${analysis.isComplete}`);
+                        if (!analysis.isComplete) {
+                            console.log(`⚠️  Data may be incomplete: ${analysis.suggestions.join(', ')}`);
+                        }
+                    }
                     break;
                 case 'knowledge_hub_query':
                     if (step.query && this.knowledgeHub) {
@@ -120,6 +128,7 @@ export class SmartAgent {
             step.status = 'completed';
             context.consecutiveFailures = 0;
             context.lastStepResult = step.result;
+            // Store result with step ID for better organization
             context.context[step.id] = step.result;
         } catch (error) {
             step.status = 'failed';
@@ -163,16 +172,119 @@ export class SmartAgent {
         }
     }
 
+    private analyzeDataCompleteness(data: any, query: string): {
+        isComplete: boolean;
+        itemCount: number;
+        dataType: 'list' | 'object' | 'single' | 'unknown';
+        hasPagination: boolean;
+        suggestions: string[];
+    } {
+        const result = {
+            isComplete: true,
+            itemCount: 0,
+            dataType: 'unknown' as const,
+            hasPagination: false,
+            suggestions: [] as string[]
+        };
+
+        try {
+            const jsonStr = JSON.stringify(data);
+
+            // Detect data type
+            if (Array.isArray(data)) {
+                result.dataType = 'list';
+                result.itemCount = data.length;
+
+                // Check for pagination indicators
+                if (data.length > 0) {
+                    const firstItem = data[0];
+                    if (typeof firstItem === 'object' && firstItem !== null) {
+                        // Look for pagination fields
+                        const paginationFields = ['nextPageToken', 'nextCursor', 'hasMore', 'isLastPage', 'startAt', 'maxResults'];
+                        const hasPaginationField = paginationFields.some(field =>
+                            firstItem.hasOwnProperty(field) ||
+                            (typeof firstItem === 'object' && firstItem !== null && Object.keys(firstItem).some(key =>
+                                key.toLowerCase().includes('page') || key.toLowerCase().includes('cursor')
+                            ))
+                        );
+
+                        if (hasPaginationField) {
+                            result.hasPagination = true;
+                            result.suggestions.push('Data may be paginated - consider additional queries for complete results');
+                        }
+                    }
+                }
+
+                // Check if this seems like a complete result
+                if (query.toLowerCase().includes('all') && data.length <= 5) {
+                    result.isComplete = false;
+                    result.suggestions.push('Query asked for "all" but only a few items returned - may be incomplete');
+                }
+
+            } else if (typeof data === 'object' && data !== null) {
+                result.dataType = 'object';
+
+                // Check if it's a wrapper object with a list inside
+                const keys = Object.keys(data);
+                if (keys.length === 1 && Array.isArray(data[keys[0]])) {
+                    result.dataType = 'list';
+                    result.itemCount = data[keys[0]].length;
+                } else if (keys.length > 10) {
+                    result.dataType = 'object';
+                    result.suggestions.push('Complex object with many fields - may contain nested data');
+                }
+
+                // Look for pagination metadata
+                const paginationIndicators = ['totalCount', 'totalSize', 'hasMore', 'nextPage', 'isLastPage'];
+                const hasPagination = paginationIndicators.some(indicator =>
+                    keys.some(key => key.toLowerCase().includes(indicator.toLowerCase()))
+                );
+
+                if (hasPagination) {
+                    result.hasPagination = true;
+                    result.suggestions.push('Pagination metadata detected - data may be incomplete');
+                }
+
+            } else {
+                result.dataType = 'single';
+                result.itemCount = 1;
+            }
+
+        } catch (error) {
+            result.suggestions.push('Error analyzing data structure');
+        }
+
+        return result;
+    }
+
     private createStepDecisionPrompt(context: ExecutionContext, availableTools: ToolInfo[]): string {
         const toolsList = availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n');
         const stepsSummary = context.steps.map(step => `${step.id}: ${step.reasoning} → ${step.status} ${step.result ? '(has result)' : ''}`).join('\n');
-        const contextSummary = Object.entries(context.context).map(([key, value]) => `${key}: ${JSON.stringify(value).slice(0, 200)}...`).join('\n');
+
+        // Analyze data completeness for each step result
+        const dataAnalysis = context.steps
+            .filter(step => step.status === 'completed' && step.result)
+            .map(step => {
+                const analysis = this.analyzeDataCompleteness(step.result, context.userQuery);
+                return `${step.id}: ${analysis.dataType} (${analysis.itemCount} items) - Complete: ${analysis.isComplete}${analysis.hasPagination ? ' - Has pagination' : ''}${analysis.suggestions.length > 0 ? ` - ${analysis.suggestions.join(', ')}` : ''}`;
+            })
+            .join('\n');
+
+        // No truncation - show complete data
+        const contextSummary = Object.entries(context.context).map(([key, value]) => {
+            const jsonValue = JSON.stringify(value);
+            return `${key}: ${jsonValue}`;
+        }).join('\n');
+
         return `You are an AI agent executing a multi-step plan. Decide what to do next.
 
 ORIGINAL USER QUERY: "${context.userQuery}"
 
 COMPLETED STEPS (${context.steps.length}/${this.maxSteps}):
 ${stepsSummary || 'No steps completed yet'}
+
+DATA COMPLETENESS ANALYSIS:
+${dataAnalysis || 'No data analysis available'}
 
 CURRENT CONTEXT:
 ${contextSummary || 'No context yet'}
@@ -191,7 +303,12 @@ Your task is to decide the next step. You can:
 3. Perform reasoning based on current results
 4. Provide final response if you have enough information
 
-IMPORTANT: Consider if you have enough information to answer the user's question. If yes, choose final_response.
+IMPORTANT GUIDELINES:
+- For "get all" or "list all" requests: Check the data completeness analysis above
+- If data analysis shows "incomplete" or "has pagination", consider additional queries
+- For large datasets: Consider if you need to aggregate or get more information
+- Look for patterns in the data that suggest pagination or incomplete results
+- Consider if you have enough information to answer the user's question comprehensively
 
 Respond with JSON:
 {
@@ -208,6 +325,7 @@ Examples:
 - If we need organizational knowledge → knowledge_hub_query
 - If we have enough data → final_response (confidence: 0.9)
 - If we need to analyze results → reasoning
+- If pagination detected → consider additional tool calls for complete data
 
 Be specific about what you want to achieve with this step.`;
     }
@@ -245,7 +363,12 @@ Be specific about what you want to achieve with this step.`;
     }
 
     private createReasoningPrompt(step: ExecutionStep, context: ExecutionContext): string {
-        const contextSummary = Object.entries(context.context).map(([key, value]) => `${key}: ${JSON.stringify(value).slice(0, 300)}...`).join('\n\n');
+        // No truncation - show complete data
+        const contextSummary = Object.entries(context.context).map(([key, value]) => {
+            const jsonValue = JSON.stringify(value);
+            return `${key}: ${jsonValue}`;
+        }).join('\n\n');
+
         return `You are performing reasoning for: ${step.reasoning}
 
 User Query: "${context.userQuery}"
@@ -260,15 +383,83 @@ Consider:
 - What conclusions can you draw?
 - What additional information might be needed?
 - How does this relate to the user's original question?
+- For list/array data: How many items are shown and does this seem complete?
+- For "get all" requests: Does the data appear to represent everything requested?
+
+Data Analysis Guidelines:
+- Count items in arrays/lists if present
+- Identify patterns in the data structure
+- Consider if this represents all requested data or just a subset
+- Look for pagination indicators or continuation tokens
 
 Provide clear, actionable insights.`;
     }
 
+    private aggregateStepResults(context: ExecutionContext): {
+        aggregatedData: Record<string, any>;
+        summary: string;
+        totalItems: number;
+        dataTypes: string[];
+    } {
+        const aggregatedData: Record<string, any> = {};
+        const dataTypes: string[] = [];
+        let totalItems = 0;
+
+        // Aggregate results from all completed steps
+        context.steps
+            .filter(step => step.status === 'completed' && step.result)
+            .forEach((step, index) => {
+                const stepKey = `step_${index + 1}_${step.type}`;
+                aggregatedData[stepKey] = step.result;
+
+                // Analyze the data
+                const analysis = this.analyzeDataCompleteness(step.result, context.userQuery);
+                dataTypes.push(`${analysis.dataType} (${analysis.itemCount} items)`);
+                totalItems += analysis.itemCount;
+
+                // If it's a list, try to merge with existing lists
+                if (analysis.dataType === 'list' && Array.isArray(step.result)) {
+                    const existingListKey = Object.keys(aggregatedData).find(key =>
+                        key !== stepKey && Array.isArray(aggregatedData[key])
+                    );
+
+                    if (existingListKey) {
+                        // Merge lists
+                        aggregatedData[existingListKey] = [...aggregatedData[existingListKey], ...step.result];
+                        delete aggregatedData[stepKey];
+                    }
+                }
+            });
+
+        // Create a summary
+        const summary = `Aggregated ${context.steps.filter(s => s.status === 'completed').length} steps: ${dataTypes.join(', ')} - Total items: ${totalItems}`;
+
+        return {
+            aggregatedData,
+            summary,
+            totalItems,
+            dataTypes
+        };
+    }
+
     private async generateFinalResponse(context: ExecutionContext): Promise<string> {
-        const resultsSummary = Object.entries(context.context).map(([key, value]) => `${key}: ${JSON.stringify(value).slice(0, 400)}...`).join('\n\n');
+        // Aggregate data from all steps
+        const aggregation = this.aggregateStepResults(context);
+
+        // No truncation - show complete data
+        const resultsSummary = Object.entries(aggregation.aggregatedData).map(([key, value]) => {
+            const jsonValue = JSON.stringify(value);
+            return `${key}: ${jsonValue}`;
+        }).join('\n\n');
+
         const finalPrompt = `Generate a comprehensive final response for the user's query.
 
 USER QUERY: "${context.userQuery}"
+
+DATA AGGREGATION SUMMARY:
+${aggregation.summary}
+- Total items found: ${aggregation.totalItems}
+- Data types: ${aggregation.dataTypes.join(', ')}
 
 EXECUTION RESULTS:
 ${resultsSummary}
@@ -289,6 +480,14 @@ Create a well-formatted, helpful response that:
 - Uses clear formatting and structure
 - Includes relevant details from the execution
 - Acknowledges any failed steps but provides what information you do have
+
+Data Completeness Guidelines:
+- Clearly state how many items were found (total: ${aggregation.totalItems})
+- For "get all" requests: Explain if the results appear complete or partial
+- If only a subset is shown but the user asked for "all", explain this clearly
+- Suggest if additional queries might be needed to get complete information
+- Provide a summary of what was found and any patterns observed
+- Use the aggregation summary to provide a comprehensive overview
 
 Make the response conversational and informative.`;
         const response = await this.bedrock.invokeModel(finalPrompt, {

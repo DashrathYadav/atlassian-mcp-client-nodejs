@@ -6,7 +6,6 @@ let isDarkMode = false;
 const searchInput = document.getElementById('search-input');
 const searchButton = document.getElementById('search-button');
 const infoContent = document.getElementById('info-content');
-const loadingContainer = document.getElementById('loading');
 const toggleInput = document.getElementById('toggle');
 const body = document.body;
 
@@ -89,23 +88,19 @@ async function handleSearch() {
     setProcessingState(true);
     
     try {
-        // Show loading
-        showLoading();
+        // Show loading in the output window
+        showLoadingInOutput();
         
         // Send request to server
         const response = await sendQueryToServer(query);
         
-        // Hide loading
-        hideLoading();
-        
-        // Update information display
+        // Update information display with the response
         updateInfoDisplay(response);
         
         // Clear the search input after successful search
         searchInput.value = '';
         
     } catch (error) {
-        hideLoading();
         console.error('Error processing search:', error);
         
         // Show error in info display
@@ -126,14 +121,23 @@ function setProcessingState(processing) {
     searchButton.disabled = processing;
 }
 
-function showLoading() {
-    loadingContainer.style.display = 'block';
-    infoContent.style.display = 'none';
-}
-
-function hideLoading() {
-    loadingContainer.style.display = 'none';
-    infoContent.style.display = 'block';
+function showLoadingInOutput() {
+    // Show loading state directly in the output window
+    const loadingHTML = `
+        <div class="loading-in-output">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p>Searching...</p>
+        </div>
+    `;
+    infoContent.innerHTML = loadingHTML;
+    
+    // Add a subtle animation
+    infoContent.style.opacity = '0';
+    setTimeout(() => {
+        infoContent.style.opacity = '1';
+    }, 50);
 }
 
 async function sendQueryToServer(query) {
