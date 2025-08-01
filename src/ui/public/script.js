@@ -173,26 +173,111 @@ function updateInfoDisplay(content) {
 }
 
 function formatContent(content) {
-    // Handle line breaks
-    let formatted = content.replace(/\n/g, '</p><p>');
+    // Handle code blocks first (before other formatting)
+    let formatted = content;
     
-    // Handle basic markdown-style formatting
+    // Handle multi-line code blocks (```code```)
+    formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, language, code) {
+        const lang = language || 'text';
+        return `<div class="code-block">
+            <div class="code-header">
+                <span class="code-language">${lang}</span>
+                <button class="copy-button" onclick="copyCode(this)">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+            <pre><code class="language-${lang}">${escapeHtml(code.trim())}</code></pre>
+        </div>`;
+    });
+    
+    // Handle inline code blocks (`code`)
+    formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+    
+    // Handle headers
+    formatted = formatted.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+    formatted = formatted.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+    formatted = formatted.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+    
+    // Handle bold text
     formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Handle italic text
     formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
     
-    // Handle code blocks (simple)
-    formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>');
+    // Handle strikethrough
+    formatted = formatted.replace(/~~(.*?)~~/g, '<del>$1</del>');
     
-    // Handle lists (simple bullet points)
-    formatted = formatted.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
+    // Handle links
+    formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Handle unordered lists
+    formatted = formatted.replace(/^[-*+]\s+(.*)$/gm, '<li>$1</li>');
     formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     
-    // Wrap in paragraph tags if not already wrapped
-    if (!formatted.startsWith('<p>')) {
+    // Handle ordered lists
+    formatted = formatted.replace(/^\d+\.\s+(.*)$/gm, '<li>$1</li>');
+    formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
+    
+    // Handle blockquotes
+    formatted = formatted.replace(/^>\s+(.*$)/gm, '<blockquote>$1</blockquote>');
+    
+    // Handle horizontal rules
+    formatted = formatted.replace(/^---$/gm, '<hr>');
+    
+    // Handle line breaks
+    formatted = formatted.replace(/\n\n/g, '</p><p>');
+    formatted = formatted.replace(/\n/g, '<br>');
+    
+    // Wrap in paragraph tags if not already wrapped and doesn't contain block elements
+    if (!formatted.startsWith('<') || formatted.startsWith('<p>')) {
         formatted = '<p>' + formatted + '</p>';
     }
     
     return formatted;
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Function to copy code to clipboard
+function copyCode(button) {
+    const codeBlock = button.closest('.code-block');
+    const code = codeBlock.querySelector('code').textContent;
+    
+    navigator.clipboard.writeText(code).then(() => {
+        // Show success feedback
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy code:', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = code;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        // Show success feedback
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    });
 }
 
 async function checkServerStatus() {
