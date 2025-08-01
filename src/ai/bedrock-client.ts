@@ -163,6 +163,7 @@ Examples:
 - "List all projects" → shouldCallTool: true, toolName: "getVisibleJiraProjects", parameters: {}
 - "Find high priority bugs" → shouldCallTool: true, toolName: "searchJiraIssuesUsingJql", parameters: {"jql": "priority = High AND type = Bug"}
 - "Search for login issues" → shouldCallTool: true, toolName: "searchJiraIssuesUsingJql", parameters: {"jql": "summary ~ 'login'"}
+- "Tell me about table <table_name>" → shouldCallTool: true, toolName: "describe_table", parameters: {"table_name": "<table_name>"}
 - "Hello" → shouldCallTool: false, response: "Hello! How can I help you with Jira or Confluence today?"
 - "What can you do?" → shouldCallTool: false, response: "I can help you search tickets, get project info, manage Confluence pages, and more. Just ask!"
 
