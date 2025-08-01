@@ -24,20 +24,23 @@ export interface BedrockConfig {
 export class BedrockClient {
     private client: BedrockRuntimeClient;
     private modelId: string;
-    private config: BedrockConfig;
 
     constructor(config: BedrockConfig, modelId: string = 'apac.anthropic.claude-sonnet-4-20250514-v1:0') {
-        this.config = config;
         this.modelId = modelId;
 
-        this.client = new BedrockRuntimeClient({
-            region: config.region,
-            credentials: config.accessKeyId && config.secretAccessKey ? {
+        const clientConfig: any = {
+            region: config.region
+        };
+
+        if (config.accessKeyId && config.secretAccessKey) {
+            clientConfig.credentials = {
                 accessKeyId: config.accessKeyId,
                 secretAccessKey: config.secretAccessKey,
                 sessionToken: config.sessionToken
-            } : undefined
-        });
+            };
+        }
+
+        this.client = new BedrockRuntimeClient(clientConfig);
     }
 
     /**
@@ -84,7 +87,7 @@ export class BedrockClient {
     /**
      * Invoke the Bedrock model
      */
-    private async invokeModel(prompt: string, config: any = {}): Promise<string> {
+    async invokeModel(prompt: string, config: any = {}): Promise<string> {
         const body = {
             anthropic_version: "bedrock-2023-05-31",
             max_tokens: config.max_tokens || 1000,

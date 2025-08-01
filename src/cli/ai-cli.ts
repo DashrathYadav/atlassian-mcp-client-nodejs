@@ -6,7 +6,9 @@ import chalk from 'chalk';
 import ora from 'ora';
 import dotenv from 'dotenv';
 import { BedrockClient, ToolInfo, BedrockConfig } from '../ai/bedrock-client.js';
+import { KnowledgeHubClient, KnowledgeHubConfig } from '../ai/knowledge-hub-client.js';
 import { MultiServerMCPManager, ServerConfig } from '../client/multi-server-mcp-manager.js';
+import { EnhancedToolDispatcher } from '../routing/enhanced-tool-dispatcher.js';
 
 // Load environment variables
 dotenv.config();
@@ -22,7 +24,9 @@ interface ConversationContext {
 
 export class SimpleAIAtlassianCLI {
   private bedrock: BedrockClient;
+  private knowledgeHub: KnowledgeHubClient;
   private mcpManager: MultiServerMCPManager;
+  private dispatcher: EnhancedToolDispatcher;
   private context: ConversationContext;
   private availableTools: ToolInfo[] = [];
 
@@ -48,6 +52,25 @@ export class SimpleAIAtlassianCLI {
 
     this.bedrock = new BedrockClient(config);
     this.mcpManager = new MultiServerMCPManager();
+
+    // Initialize Knowledge Hub client
+    const khConfig: KnowledgeHubConfig = {
+      region: process.env['AWS_REGION'] || 'ap-south-1',
+      knowledgeBaseId: process.env['BEDROCK_KB_ID'] || '',
+      modelArn: process.env['BEDROCK_MODEL_ID'] || '',
+      accessKeyId: process.env['AWS_ACCESS_KEY_ID'] || undefined,
+      secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'] || undefined
+    };
+
+    this.knowledgeHub = new KnowledgeHubClient(khConfig);
+
+    // Initialize enhanced dispatcher
+    this.dispatcher = new EnhancedToolDispatcher(
+      this.mcpManager,
+      this.knowledgeHub,
+      this.bedrock
+    );
+
     this.context = {
       history: [],
       currentSession: new Date().toISOString()
@@ -129,8 +152,25 @@ export class SimpleAIAtlassianCLI {
       return;
     }
 
+    // Step 4: Test Knowledge Hub connection if configured
+    if (process.env['BEDROCK_KB_ID'] && process.env['BEDROCK_MODEL_ID']) {
+      const khSpinner = ora('Testing Knowledge Hub connection...').start();
+      try {
+        const khConnected = await this.knowledgeHub.testConnection();
+        if (khConnected) {
+          khSpinner.succeed('Knowledge Hub connected successfully');
+        } else {
+          khSpinner.fail('Knowledge Hub connection failed - Knowledge Hub features will be disabled');
+        }
+      } catch (error) {
+        khSpinner.fail(`Knowledge Hub connection error: ${error}`);
+      }
+    } else {
+      console.log(chalk.yellow('⚠️  Knowledge Hub not configured - set BEDROCK_KB_ID and BEDROCK_MODEL_ID to enable'));
+    }
+
     console.log();
-    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira, Confluence, Bitbucket, and your database.'));
+    console.log(chalk.green('✅ All systems ready! You can now ask questions about Jira, Confluence, Bitbucket, database, and Knowledge Hub.'));
     console.log(chalk.gray('Examples:'));
     console.log(chalk.gray('  • "Show me all open tickets"'));
     console.log(chalk.gray('  • "Get details for ticket MD-1"'));
@@ -139,6 +179,8 @@ export class SimpleAIAtlassianCLI {
     console.log(chalk.gray('  • "List pull requests"'));
     console.log(chalk.gray('  • "Query users table"'));
     console.log(chalk.gray('  • "Show database schema"'));
+    console.log(chalk.gray('  • "What are our API specifications?"'));
+    console.log(chalk.gray('  • "Tell me about Amadeus integration"'));
     console.log(chalk.gray('  • Type "help" for more commands'));
     console.log();
 
@@ -216,26 +258,11 @@ export class SimpleAIAtlassianCLI {
     const spinner = ora('🧠 Analyzing your query...').start();
 
     try {
-      // Step 1: Let AI analyze the query and decide what to do
+      // Use the enhanced dispatcher to handle all types of queries
       spinner.text = '🧠 AI is analyzing your request...';
-      const analysis = await this.bedrock.analyzeQuery(userQuery, this.availableTools);
+      const finalResponse = await this.dispatcher.processQuery(userQuery);
 
-      spinner.succeed(`AI Analysis: ${analysis.reasoning}`);
-
-      let finalResponse: string;
-
-      if (analysis.shouldCallTool && analysis.toolName) {
-        // Step 2: Call the MCP tool on the appropriate server
-        spinner.text = `🛠️  Calling ${analysis.toolName}...`;
-        const toolResult = await this.mcpManager.callTool(analysis.toolName, analysis.parameters || {});
-
-        // Step 3: Let AI format the response
-        spinner.text = '✨ Formatting response...';
-        finalResponse = await this.bedrock.formatResponse(toolResult, userQuery);
-      } else {
-        // No tool needed, use AI's direct response
-        finalResponse = analysis.response || 'I understand your request but don\'t need to call any tools.';
-      }
+      spinner.succeed('✅ Query processed successfully');
 
       // Display the response
       console.log();
@@ -268,6 +295,9 @@ export class SimpleAIAtlassianCLI {
     console.log(chalk.gray('  • "Search for tickets about login"'));
     console.log(chalk.gray('  • "Query users table"'));
     console.log(chalk.gray('  • "Show database schema"'));
+    console.log(chalk.gray('  • "What are our API specifications?"'));
+    console.log(chalk.gray('  • "Tell me about Amadeus integration"'));
+    console.log(chalk.gray('  • "What are our organization policies?"'));
     console.log(chalk.gray('  • "Hello" or "What can you do?"'));
 
     console.log(chalk.white('\n⚡ Special Commands:'));
